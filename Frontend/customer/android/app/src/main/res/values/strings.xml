@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gaunle Swad</string>
+    <string name="title_activity_main">Gaunle Swad</string>
+    <string name="package_name">com.gaunleswad.customer</string>
+    <string name="custom_url_scheme">com.gaunleswad.customer</string>
+</resources>

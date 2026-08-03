@@ -1,0 +1,8 @@
+{
+  "appId": "com.gaunleswad.kitchen",
+  "appName": "Gaunle Swad Kitchen",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

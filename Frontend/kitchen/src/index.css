@@ -1,0 +1,21 @@
+/* ─── Gharko Swaad: Shared Design System Tokens ─────────────────────────── */
+@import "../../shared/theme/provider.css";
+
+@import "@fontsource-variable/fraunces";
+@import "tailwindcss";
+@source "../../shared";
+
+@theme {
+  --color-primary-50: #fff1f2;
+  --color-primary-100: #ffe4e6;
+  --color-primary-500: #f43f5e;
+  --color-primary-600: #e11d48;
+  --color-primary-700: #be123c;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+}

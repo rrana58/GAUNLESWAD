@@ -1,0 +1,87 @@
+/* ─── Gharko Swaad: Shared Design System Tokens ─────────────────────────── */
+@import "../../shared/theme/provider.css";
+
+@import "@fontsource-variable/fraunces";
+@import "tailwindcss";
+@source "../../shared";
+@import "tw-animate-css";
+@import "@fontsource-variable/fraunces";
+@import "@fontsource/ibm-plex-sans";
+@import "@fontsource/ibm-plex-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+
+@theme inline {
+  --font-display: 'Fraunces Variable', ui-serif, Georgia, serif;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Brand Colors (Sampled from Logo) */
+  --color-forest: #0F4C2A;
+  --color-forest-light: #1B663C;
+  --color-terracotta: #D85B1B;
+  --color-terracotta-dark: #B2450F;
+  --color-leaf: #528532;
+  --color-paper: #F9F7F2;
+  --color-paper-dim: #EFECE3;
+  --color-steel: #5C6B73;
+  --color-ink: #1C241E;
+
+  /* UI Mappings */
+  --color-background: var(--color-paper);
+  --color-foreground: var(--color-ink);
+  --color-card: #FFFFFF;
+  --color-card-foreground: var(--color-ink);
+  
+  /* Primary = Deep Forest Green */
+  --color-primary: var(--color-forest);
+  --color-primary-foreground: var(--color-paper);
+  
+  /* Secondary = Terracotta Orange */
+  --color-secondary: var(--color-terracotta);
+  --color-secondary-foreground: var(--color-paper);
+  
+  /* Accent = Fresh Leaf Green */
+  --color-accent: var(--color-leaf);
+  --color-accent-foreground: var(--color-paper);
+
+  --color-muted: var(--color-paper-dim);
+  --color-muted-foreground: var(--color-steel);
+  --color-border: #E5DFD3;
+  --color-input: #E5DFD3;
+  --color-ring: var(--color-forest);
+  --color-destructive: #B3402A;
+  --color-success: var(--color-leaf);
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.5rem;
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { -webkit-tap-highlight-color: transparent; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    /* Respect device safe areas (notch / home indicator) for the Capacitor build */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    overscroll-behavior-y: none;
+  }
+  h1, h2, h3, h4 { @apply font-display; }
+  .font-mono, .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Prevent iOS input zoom on focus (inputs must be >=16px) */
+  input, select, textarea { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
