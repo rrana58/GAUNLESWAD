@@ -51,7 +51,10 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
 };
 
 /**
- * Send push notification to multiple devices
+ * Send push notification to multiple devices. Firebase's multicast API
+ * hard-rejects calls with more than 500 tokens (throws, doesn't just
+ * truncate) — chunks into batches of 500 so a broadcast to a growing user
+ * base doesn't start failing outright once you cross that number.
  */
 const sendMulticastPush = async (fcmTokens, title, body, data = {}) => {
   if (!fcmTokens?.length) return;
@@ -59,19 +62,29 @@ const sendMulticastPush = async (fcmTokens, title, body, data = {}) => {
     if (!firebaseApp) initFirebase();
     if (!firebaseApp) return;
 
-    const message = {
-      tokens: fcmTokens,
-      notification: { title, body },
-      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
-      android: { 
-        priority: "high",
-        notification: { sound: "default" }
-      },
-      apns: { payload: { aps: { badge: 1, sound: "default" } } },
-    };
+    const payloadData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
+    const BATCH_SIZE = 500;
+    let totalSuccess = 0;
+    let totalFailure = 0;
 
-    const response = await admin.messaging().sendEachForMulticast(message);
-    logger.info(`FCM multicast: ${response.successCount} sent, ${response.failureCount} failed`);
+    for (let i = 0; i < fcmTokens.length; i += BATCH_SIZE) {
+      const batch = fcmTokens.slice(i, i + BATCH_SIZE);
+      const message = {
+        tokens: batch,
+        notification: { title, body },
+        data: payloadData,
+        android: {
+          priority: "high",
+          notification: { sound: "default" }
+        },
+        apns: { payload: { aps: { badge: 1, sound: "default" } } },
+      };
+      const response = await admin.messaging().sendEachForMulticast(message);
+      totalSuccess += response.successCount;
+      totalFailure += response.failureCount;
+    }
+
+    logger.info(`FCM multicast: ${totalSuccess} sent, ${totalFailure} failed (${fcmTokens.length} total tokens)`);
   } catch (error) {
     logger.error(`FCM multicast error: ${error.message}`);
   }

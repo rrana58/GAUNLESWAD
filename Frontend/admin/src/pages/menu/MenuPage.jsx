@@ -273,9 +273,13 @@ function CategoryModal({ category, onClose, onSave }) {
 
 // ─── MenuItemModal ───────────────────────────────────────────────────────────
 function MenuItemModal({ item, categories, onClose, onSave }) {
+  const initialCategories = item?.categories?.length > 0
+    ? item.categories.map(c => c._id || c)
+    : (item?.category?._id || item?.category ? [item.category._id || item.category] : [])
+
   const [form, setForm] = useState({
     name: item?.name || '',
-    category: item?.category?._id || item?.category || '',
+    categories: initialCategories,
     basePrice: item?.basePrice || '',
     description: item?.description || '',
     stockQuantity: item?.stockQuantity ?? '',
@@ -285,6 +289,8 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
     isCelebrationEligible: item?.isCelebrationEligible ?? false,
     tags: item?.tags?.join(', ') || '',
     image: item?.image || null,
+    variants: item?.variants || [],
+    addons: item?.addons || [],
   })
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(item?.image?.url || null)
@@ -292,6 +298,59 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
   const [loading, setLoading] = useState(false)
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  const toggleCategory = (catId) => {
+    setForm((f) => ({
+      ...f,
+      categories: f.categories.includes(catId)
+        ? f.categories.filter(c => c !== catId)
+        : [...f.categories, catId]
+    }))
+  }
+
+  const addVariant = () => {
+    setForm((f) => ({
+      ...f,
+      variants: [...f.variants, { name: '', price: '', isAvailable: true }],
+    }))
+  }
+
+  const removeVariant = (index) => {
+    setForm((f) => ({
+      ...f,
+      variants: f.variants.filter((_, i) => i !== index),
+    }))
+  }
+
+  const updateVariant = (index, field, value) => {
+    setForm((f) => {
+      const newVariants = [...f.variants]
+      newVariants[index] = { ...newVariants[index], [field]: value }
+      return { ...f, variants: newVariants }
+    })
+  }
+
+  const addAddon = () => {
+    setForm((f) => ({
+      ...f,
+      addons: [...f.addons, { name: '', price: '', isAvailable: true }],
+    }))
+  }
+
+  const removeAddon = (index) => {
+    setForm((f) => ({
+      ...f,
+      addons: f.addons.filter((_, i) => i !== index),
+    }))
+  }
+
+  const updateAddon = (index, field, value) => {
+    setForm((f) => {
+      const newAddons = [...f.addons]
+      newAddons[index] = { ...newAddons[index], [field]: value }
+      return { ...f, addons: newAddons }
+    })
+  }
 
   const handleImageChange = (e) => {
     const file = e.target.files[0]
@@ -304,7 +363,7 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return toast.error('Name is required')
-    if (!form.category) return toast.error('Category is required')
+    if (!form.categories || form.categories.length === 0) return toast.error('Select at least one category')
     if (!form.basePrice || isNaN(form.basePrice)) return toast.error('Valid price is required')
     setLoading(true)
     try {
@@ -319,10 +378,14 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
       }
       const payload = {
         ...form,
+        category: form.categories[0], // primary fallback
+        categories: form.categories,
         basePrice: Number(form.basePrice),
         stockQuantity: form.stockQuantity !== '' ? Number(form.stockQuantity) : null,
         tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
         image: imageData,
+        variants: form.variants.map(v => ({ ...v, price: Number(v.price) })),
+        addons: form.addons.map(a => ({ ...a, price: Number(a.price) })),
       }
       await onSave(payload)
       onClose()
@@ -413,20 +476,21 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
                 aria-required="true"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="item-category">Category *</Label>
-              <select
-                id="item-category"
-                name="category"
-                value={form.category}
-                onChange={(e) => set('category', e.target.value)}
-                className={selectCls}
-                style={selectStyle}
-                aria-required="true"
-              >
-                <option value="">Select category</option>
-                {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
-              </select>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Categories (Select all that apply) *</Label>
+              <div className="border border-border rounded-lg p-2.5 max-h-36 overflow-y-auto space-y-1.5 bg-card">
+                {categories.map((c) => (
+                  <label key={c._id} className="flex items-center gap-2.5 text-sm cursor-pointer hover:bg-muted p-1 rounded transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={form.categories.includes(c._id)}
+                      onChange={() => toggleCategory(c._id)}
+                      className="rounded cursor-pointer"
+                    />
+                    <span className="text-foreground">{c.name}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="item-price">Base Price (Rs.) *</Label>
@@ -475,6 +539,116 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
           </div>
         </fieldset>
 
+        {/* Variants Section */}
+        <fieldset className="border border-border p-4 rounded-lg space-y-3">
+          <legend className="px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Variants / Sub-items (e.g. Veg, Chicken, Buff)
+          </legend>
+          <div className="space-y-2">
+            {form.variants.map((v, idx) => (
+              <div key={idx} className="flex gap-2 items-center bg-muted/30 p-2 rounded-lg border border-border">
+                <Input
+                  placeholder="Variant Name"
+                  value={v.name}
+                  onChange={(e) => updateVariant(idx, 'name', e.target.value)}
+                  className="flex-1 h-9 bg-card"
+                  required
+                />
+                <Input
+                  type="number"
+                  placeholder="Price"
+                  value={v.price}
+                  onChange={(e) => updateVariant(idx, 'price', e.target.value)}
+                  className="w-24 h-9 bg-card"
+                  required
+                />
+                <label className="flex items-center gap-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={v.isAvailable}
+                    onChange={(e) => updateVariant(idx, 'isAvailable', e.target.checked)}
+                    className="rounded cursor-pointer"
+                  />
+                  <span className="text-xs text-muted-foreground select-none">Avail</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => removeVariant(idx)}
+                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 h-8 w-8 rounded-full"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addVariant}
+              className="w-full text-xs h-8 text-[var(--gs-admin-accent)] border-[var(--gs-admin-accent)]/30 hover:bg-[var(--gs-admin-accent)]/5"
+            >
+              <Plus size={14} className="mr-1" />
+              Add Variant Option
+            </Button>
+          </div>
+        </fieldset>
+
+        {/* Add-ons Section */}
+        <fieldset className="border border-border p-4 rounded-lg space-y-3">
+          <legend className="px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Add-ons / Sides (e.g. Extra Achar, Extra Butter)
+          </legend>
+          <div className="space-y-2">
+            {form.addons.map((a, idx) => (
+              <div key={idx} className="flex gap-2 items-center bg-muted/30 p-2 rounded-lg border border-border">
+                <Input
+                  placeholder="Add-on Name"
+                  value={a.name}
+                  onChange={(e) => updateAddon(idx, 'name', e.target.value)}
+                  className="flex-1 h-9 bg-card"
+                  required
+                />
+                <Input
+                  type="number"
+                  placeholder="Price"
+                  value={a.price}
+                  onChange={(e) => updateAddon(idx, 'price', e.target.value)}
+                  className="w-24 h-9 bg-card"
+                  required
+                />
+                <label className="flex items-center gap-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={a.isAvailable}
+                    onChange={(e) => updateAddon(idx, 'isAvailable', e.target.checked)}
+                    className="rounded cursor-pointer"
+                  />
+                  <span className="text-xs text-muted-foreground select-none">Avail</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => removeAddon(idx)}
+                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 h-8 w-8 rounded-full"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addAddon}
+              className="w-full text-xs h-8 text-[var(--gs-admin-accent)] border-[var(--gs-admin-accent)]/30 hover:bg-[var(--gs-admin-accent)]/5"
+            >
+              <Plus size={14} className="mr-1" />
+              Add Add-on / Extra Option
+            </Button>
+          </div>
+        </fieldset>
+
         {/* Toggles */}
         <fieldset className="border-0 p-0 m-0">
           <legend className="sr-only">Item options</legend>
@@ -494,7 +668,7 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
                   onChange={(e) => set(name, e.target.checked)}
                   className="rounded cursor-pointer"
                 />
-                <Label htmlFor={id} className="cursor-pointer">{label}</Label>
+                <Label htmlFor={id} className="cursor-pointer text-sm font-medium">{label}</Label>
               </div>
             ))}
           </div>
@@ -787,63 +961,85 @@ export default function MenuPage() {
 
       {/* ── Categories tab ─────────────────────────────────────────── */}
       {tab === 'categories' && (
-        <section
-          className="bg-card border border-border overflow-hidden"
-          aria-label="Categories table"
-          style={{ borderRadius: 'var(--gs-admin-radius-xl)' }}
-        >
-          <table className="w-full text-sm" aria-label="Menu categories">
-            <thead className="bg-muted border-b border-border">
-              <tr className="text-left text-muted-foreground text-xs">
-                <th scope="col" className="px-4 py-3 font-medium">Name</th>
-                <th scope="col" className="px-4 py-3 font-medium">Slug</th>
-                <th scope="col" className="px-4 py-3 font-medium">Description</th>
-                <th scope="col" className="px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {categories.map((cat) => (
-                <tr key={cat._id} className="hover:bg-muted transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {cat.image?.url
-                        ? <img src={cat.image.url} alt="" className="w-8 h-8 object-cover" style={{ borderRadius: 'var(--gs-admin-radius-md)' }} />
-                        : (
-                          <div
-                            className="w-8 h-8 bg-muted flex items-center justify-center text-xs"
-                            style={{ borderRadius: 'var(--gs-admin-radius-md)' }}
-                            aria-hidden="true"
-                          >🍲</div>
-                        )
-                      }
-                      <span className="font-medium text-foreground">{cat.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground/60 font-mono text-xs">{cat.slug}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{cat.description || '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost" size="sm" className="h-7 px-2 gs-admin-focus-ring"
-                        aria-label={`Edit ${cat.name}`}
-                        onClick={() => setCategoryModal(cat)}
-                      >
-                        <Pencil size={13} aria-hidden="true" />
-                      </Button>
-                      <Button
-                        variant="ghost" size="sm" className="h-7 px-2 text-red-500 gs-admin-focus-ring"
-                        aria-label={`Delete ${cat.name}`}
-                        onClick={() => window.confirm(`Delete ${cat.name}?`) && deleteCat.mutate(cat._id)}
-                      >
-                        <Trash2 size={13} aria-hidden="true" />
-                      </Button>
-                    </div>
-                  </td>
+        <div className="space-y-4">
+          <div className="flex gap-3 items-center max-w-md">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Input
+                type="search"
+                placeholder="Search categories..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+          </div>
+          <section
+            className="bg-card border border-border overflow-hidden"
+            aria-label="Categories table"
+            style={{ borderRadius: 'var(--gs-admin-radius-xl)' }}
+          >
+            <table className="w-full text-sm" aria-label="Menu categories">
+              <thead className="bg-muted border-b border-border">
+                <tr className="text-left text-muted-foreground text-xs">
+                  <th scope="col" className="px-4 py-3 font-medium">Name</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Slug</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Description</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {categories.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.description && c.description.toLowerCase().includes(search.toLowerCase()))).length === 0 ? (
+                  <tr>
+                    <td colSpan={4}>
+                      <EmptyState message="No categories found" sub="Try a different search query" />
+                    </td>
+                  </tr>
+                ) : categories
+                  .filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.description && c.description.toLowerCase().includes(search.toLowerCase())))
+                  .map((cat) => (
+                  <tr key={cat._id} className="hover:bg-muted transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {cat.image?.url
+                          ? <img src={cat.image.url} alt="" className="w-8 h-8 object-cover" style={{ borderRadius: 'var(--gs-admin-radius-md)' }} />
+                          : (
+                            <div
+                              className="w-8 h-8 bg-muted flex items-center justify-center text-xs"
+                              style={{ borderRadius: 'var(--gs-admin-radius-md)' }}
+                              aria-hidden="true"
+                            >🍲</div>
+                          )
+                        }
+                        <span className="font-medium text-foreground">{cat.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground/60 font-mono text-xs">{cat.slug}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{cat.description || '—'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost" size="sm" className="h-7 px-2 gs-admin-focus-ring"
+                          aria-label={`Edit ${cat.name}`}
+                          onClick={() => setCategoryModal(cat)}
+                        >
+                          <Pencil size={13} aria-hidden="true" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="sm" className="h-7 px-2 text-red-500 gs-admin-focus-ring"
+                          aria-label={`Delete ${cat.name}`}
+                          onClick={() => window.confirm(`Delete ${cat.name}?`) && deleteCat.mutate(cat._id)}
+                        >
+                          <Trash2 size={13} aria-hidden="true" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
       )}
 
       {/* ── Items tab ──────────────────────────────────────────────── */}
@@ -947,7 +1143,11 @@ export default function MenuPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{item.category?.name || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {item.categories?.length > 0
+                          ? item.categories.map(c => c.name).join(', ')
+                          : (item.category?.name || '—')}
+                      </td>
                       <td className="px-4 py-3 font-semibold text-foreground">Rs. {item.basePrice}</td>
                       <td className="px-4 py-3">
                         <button

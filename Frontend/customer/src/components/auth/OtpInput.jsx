@@ -1,12 +1,6 @@
 import { useRef } from 'react'
 
-/**
- * OtpInput — Design System: Phase 4.1 Auth Migration
- * Each digit cell uses --gs-radius-lg border radius and --gs-primary focus ring.
- * focus-visible:ring replaces the old `focus:border-primary` to ensure keyboard
- * navigation is WCAG AA compliant without impacting mouse users.
- * Touch target: h-12 (48px) × w-11 (44px) — meets 44×44px minimum.
- */
+
 export default function OtpInput({ value, onChange, error }) {
   const inputsRef = useRef([])
   const digits = value.split('').concat(Array(6).fill('')).slice(0, 6)

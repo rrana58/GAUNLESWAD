@@ -1,5 +1,6 @@
 const MenuItem = require("../models/MenuItem");
 const Category = require("../models/Category");
+const Settings = require("../models/Settings");
 const { cloudinary } = require("../config/cloudinary");
 const { getRedis } = require("../config/redis");
 const { sendSuccess, sendPaginated } = require("../utils/response");
@@ -7,6 +8,32 @@ const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
 
 const MENU_CACHE_TTL = 300; // 5 minutes
+
+// Attaches originalPrice/discountedPrice to each item (basePrice-based —
+// MenuItemCard shows this as the item's headline price regardless of
+// variants) so the global discount customers see on Home/checkout actually
+// matches what's shown while browsing, instead of only appearing at
+// checkout. Applied at request time (not baked into the Redis cache) so a
+// discount change in admin settings reflects immediately, without waiting
+// on cache TTL.
+const attachDisplayPricing = (items, globalDiscountPercent) => {
+  const hasDiscount = globalDiscountPercent > 0;
+  const multiplier = hasDiscount ? 1 - globalDiscountPercent / 100 : 1;
+  return items.map((i) => ({
+    ...i,
+    originalPrice: i.basePrice,
+    discountedPrice: hasDiscount ? Math.round(i.basePrice * multiplier) : null,
+    variants: (i.variants || []).map((v) => ({
+      ...v,
+      originalPrice: v.price,
+      discountedPrice: hasDiscount ? Math.round(v.price * multiplier) : null,
+    })),
+  }));
+};
+
+// Escapes regex special characters so a raw search string can be safely used
+// inside a $regex filter (prevents both invalid-pattern errors and ReDoS).
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // ─── Categories ───────────────────────────────────────────────────────────────
 exports.getCategories = catchAsync(async (req, res) => {
@@ -54,7 +81,7 @@ const ALLOWED_SORTS = [
 
 // Field whitelist for menu items — prevents mass assignment (e.g. avgRating, totalOrders)
 const MENU_ITEM_FIELDS = [
-  "name", "nameNepali", "description", "category", "image", "basePrice",
+  "name", "nameNepali", "description", "category", "categories", "image", "basePrice",
   "variants", "addons", "isVeg", "isVegan", "isSpicy", "allergens",
   "isAvailable", "isAvailableForDelivery", "isCelebrationEligible", "availableFrom", "availableUntil",
   "isFeatured", "sortOrder", "tags", "preparationTime", "stockQuantity",
@@ -84,25 +111,27 @@ exports.getMenu = catchAsync(async (req, res) => {
   const { category, search, featured, isCombo } = req.query;
 
   const filter = { isAvailable: true };
-  if (category) filter.category = category;
+  if (category) filter.$or = [{ category: category }, { categories: category }];
   if (featured === "true") filter.isFeatured = true;
   if (isCombo === "true") filter.isCombo = true;
   if (isCombo === "false") filter.isCombo = { $ne: true };
-  if (search) filter.$text = { $search: search };
+  if (search) filter.name = { $regex: escapeRegex(search), $options: "i" };
 
   const skip = (page - 1) * limit;
-  const [items, total] = await Promise.all([
+  const [items, total, settings] = await Promise.all([
     MenuItem.find(filter)
       .populate("category", "name slug")
+      .populate("categories", "name slug")
       .populate("comboItems.item", "name image basePrice")
       .sort(sort)
       .skip(skip)
       .limit(limit)
       .lean(),
     MenuItem.countDocuments(filter),
+    Settings.getSettings(),
   ]);
 
-  sendPaginated(res, { items }, total, page, limit);
+  sendPaginated(res, { items: attachDisplayPricing(items, settings.globalDiscountPercent) }, total, page, limit);
 });
 
 // Admin listing — unlike getMenu (public/customer-facing), this does NOT
@@ -118,20 +147,19 @@ exports.getMenuAdmin = catchAsync(async (req, res) => {
   const { category, search, featured, isAvailable, isCombo } = req.query;
 
   const filter = {};
-  if (category) filter.category = category;
+  if (category) filter.$or = [{ category: category }, { categories: category }];
   if (featured === "true") filter.isFeatured = true;
   if (isCombo === "true") filter.isCombo = true;
   if (isCombo === "false") filter.isCombo = { $ne: true };
-  // Only filter on availability if the admin UI explicitly asks for it
-  // (e.g. a future "show only unavailable" toggle) — default is "show all".
   if (isAvailable === "true") filter.isAvailable = true;
   if (isAvailable === "false") filter.isAvailable = false;
-  if (search) filter.$text = { $search: search };
+  if (search) filter.name = { $regex: escapeRegex(search), $options: "i" };
 
   const skip = (page - 1) * limit;
   const [items, total] = await Promise.all([
     MenuItem.find(filter)
       .populate("category", "name slug")
+      .populate("categories", "name slug")
       .populate("comboItems.item", "name image basePrice")
       .sort(sort)
       .skip(skip)
@@ -145,33 +173,58 @@ exports.getMenuAdmin = catchAsync(async (req, res) => {
 
 exports.getMenuGroupedByCategory = catchAsync(async (req, res) => {
   const redis = getRedis();
+  const settings = await Settings.getSettings();
+  let menu;
+
   const cached = await redis.get("menu:grouped").catch(() => null);
-  if (cached) return sendSuccess(res, { menu: JSON.parse(cached) });
+  if (cached) {
+    menu = JSON.parse(cached);
+  } else {
+    const categories = await Category.find({ isActive: true }).sort({ sortOrder: 1 });
+    const items = await MenuItem.find({ isAvailable: true })
+      .populate("category", "name slug")
+      .populate("categories", "name slug")
+      .populate("comboItems.item", "name image basePrice")
+      .sort({ sortOrder: 1 })
+      .lean();
 
-  const categories = await Category.find({ isActive: true }).sort({ sortOrder: 1 });
-  const items = await MenuItem.find({ isAvailable: true })
-    .populate("category", "name slug")
-    .populate("comboItems.item", "name image basePrice")
-    .sort({ sortOrder: 1 })
-    .lean();
+    menu = categories.map((cat) => ({
+      category: cat,
+      items: items.filter((i) => {
+        const catIdStr = cat._id.toString();
+        if (i.categories && i.categories.length > 0) {
+          return i.categories.some((c) => (c._id || c).toString() === catIdStr);
+        }
+        return i.category && (i.category._id || i.category).toString() === catIdStr;
+      }),
+    }));
 
-  const menu = categories.map((cat) => ({
-    category: cat,
-    items: items.filter((i) => i.category._id.toString() === cat._id.toString()),
+    // Cache the raw (undiscounted) menu — pricing is applied fresh below on
+    // every request so a discount change in admin settings takes effect
+    // immediately instead of waiting out the cache TTL.
+    await redis.setex("menu:grouped", MENU_CACHE_TTL, JSON.stringify(menu)).catch(() => {});
+  }
+
+  const pricedMenu = menu.map((group) => ({
+    ...group,
+    items: attachDisplayPricing(group.items, settings.globalDiscountPercent),
   }));
 
-  await redis.setex("menu:grouped", MENU_CACHE_TTL, JSON.stringify(menu)).catch(() => {});
-  sendSuccess(res, { menu });
+  sendSuccess(res, { menu: pricedMenu });
 });
 
 exports.getMenuItem = catchAsync(async (req, res) => {
-  const item = await MenuItem.findOne({
-    $or: [{ _id: req.params.id }, { slug: req.params.id }],
-    isAvailable: true,
-  }).populate("category", "name slug").populate("comboItems.item", "name image basePrice");
+  const [item, settings] = await Promise.all([
+    MenuItem.findOne({
+      $or: [{ _id: req.params.id }, { slug: req.params.id }],
+      isAvailable: true,
+    }).populate("category", "name slug").populate("comboItems.item", "name image basePrice").lean(),
+    Settings.getSettings(),
+  ]);
 
   if (!item) throw new AppError("Menu item not found", 404);
-  sendSuccess(res, { item });
+  const [pricedItem] = attachDisplayPricing([item], settings.globalDiscountPercent);
+  sendSuccess(res, { item: pricedItem });
 });
 
 exports.getCelebrationMenu = catchAsync(async (req, res) => {

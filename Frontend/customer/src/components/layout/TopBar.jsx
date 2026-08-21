@@ -2,22 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, UserRound } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import NotificationBell from './NotificationBell'
 
-/**
- * TopBar — Design System: Phase 4.2 Customer Home Migration
- *
- * Replaced:
- *   bg-paper    → var(--gs-bg, #FAF8F5) — Warm Ivory search surface
- *   bg-paper/15 → rgba(250,248,245, 0.15) — avatar background
- *   border-paper/25 → rgba(250,248,245, 0.25) — avatar border
- *   text-paper  → var(--gs-bg, #FAF8F5) — text on dark primary bar
- *
- * TopBar background is --gs-primary (Forest Green) — consistent with Hero.
- * No business logic, search, or routing changed.
- */
+
 export default function TopBar() {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
+  const { user, isAuthenticated } = useAuthStore()
   const [query, setQuery] = useState('')
 
   const handleSearch = (e) => {
@@ -64,6 +54,9 @@ export default function TopBar() {
           className="flex-1 min-w-0 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground"
         />
       </form>
+
+      {/* Notifications — only meaningful once logged in */}
+      {isAuthenticated && <NotificationBell />}
 
       {/* Profile avatar */}
       <button

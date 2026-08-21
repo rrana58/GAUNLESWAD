@@ -1,8 +1,6 @@
 import React from 'react';
 
-/**
- * Standard Quantity Stepper Component (- 1 +)
- */
+
 export function QuantityStepper({
   value = 1,
   min = 1,

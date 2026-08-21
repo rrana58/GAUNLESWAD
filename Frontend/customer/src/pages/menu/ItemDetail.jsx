@@ -8,34 +8,7 @@ import { useCartStore } from '@/store/cartStore'
 import { formatNpr, cn } from '@/lib/utils'
 import RatingStars from '@/components/menu/RatingStars'
 
-/**
- * ItemDetail — Design System: Phase 4.3 Product Detail Migration
- *
- * Token changes:
- *  - Back button: bg-white/90 → var(--gs-surface) with opacity; rounded-full + shadow → tokens
- *  - Combo placeholder: bg-white → var(--gs-surface)
- *  - Skeletons: animate-pulse → gs-skeleton
- *  - Special instructions: focus:border-primary → focus-visible:ring-2 + border token
- *  - Special instructions: rounded-lg → var(--gs-radius-lg)
- *  - Out-of-stock text: plain text → role="alert"
- *  - Allergens: inline text → styled pill with --gs-radius-full
- *  - Review items: border-b border-border retained ✅
- *  - Bottom action bar: z-40 → var(--gs-z-sticky); rounded-lg → var(--gs-radius-lg)
- *  - All hardcoded radius strings → var(--gs-radius-*) tokens
- *
- * Accessibility:
- *  - Back button: aria-label "Go back to menu" + gs-focus-ring
- *  - Veg/Spicy icons: aria-label on wrapper, aria-hidden on icon
- *  - Variant radiogroup: role="radiogroup" + aria-labelledby
- *  - Addon group: role="group" + aria-labelledby
- *  - Radio/checkbox: aria-label with name + price
- *  - Quantity stepper: h-7 w-7 (28px) → h-11 w-11 (44px); aria-live on count
- *  - Add to cart: aria-label with quantity + name + total; gs-focus-ring
- *  - Rating: RatingStars already has role="img" aria-label ✅
- *  - Review list: role="list" + role="listitem"
- *
- * No business logic, cart, API, state, or routing changed.
- */
+
 export default function ItemDetail() {
   const { id } = useParams()
   const navigate = useNavigate()

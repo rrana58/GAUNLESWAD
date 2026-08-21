@@ -1,19 +1,7 @@
 import { Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/**
- * StarRating — Design System: Phase 4.6 Orders Migration
- *
- * Token changes:
- *  - Star buttons: p-0.5 → h-11 w-11 (44px WCAG touch targets)
- *
- * Accessibility:
- *  - Wrapper: role="radiogroup" + aria-label
- *  - Each button: aria-pressed (selected state) + gs-focus-ring
- *  - Star icon: aria-hidden="true" (button label carries meaning)
- *
- * Prop interface (value, onChange, size) unchanged.
- */
+
 export default function StarRating({ value, onChange, size = 28 }) {
   return (
     <div

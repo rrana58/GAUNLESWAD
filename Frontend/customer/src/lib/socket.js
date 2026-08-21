@@ -6,8 +6,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL.replace(/\/api\/v\
 
 let socket = null
 
-/** Singleton socket for live order-status updates. Token is read fresh on
- *  every (re)connect so a rotated access token is always picked up. */
+
 export function getSocket() {
   if (socket) return socket
 

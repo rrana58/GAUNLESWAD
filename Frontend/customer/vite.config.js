@@ -7,14 +7,13 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Customer-facing PWA — also gets wrapped with Capacitor in Phase 10
-// for real iOS / Android store builds.
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Gaunle Swad',

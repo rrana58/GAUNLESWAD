@@ -1,18 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 
-/**
- * PageHeader — Design System: Phase 4.2 Customer Home Migration
- *
- * Changes:
- *  - Back button: added gs-focus-ring for keyboard accessibility
- *  - z-index: z-10 → z-[var(--gs-z-sticky)] token
- *  - Shadow from border-b border-border retained (Tailwind semantic token, correct)
- *  - All other Tailwind semantic tokens retained (bg-background, text-foreground, etc.)
- *  - Touch target: p-1.5 gives ~36px — increased to p-2 (40px) for closer WCAG compliance
- *
- * No navigation or prop interface changed.
- */
+
 export default function PageHeader({ title, showBackButton = true, rightElement, onBack }) {
   const navigate = useNavigate()
   return (

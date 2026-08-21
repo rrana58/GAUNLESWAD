@@ -1,21 +1,3 @@
-/**
- * jobs/queues.js
- *
- * All background queues and cron jobs for Gharko Swad.
- *
- * Queues
- * ──────
- *   notifications  – FCM push + DB notification record
- *   orders         – auto_cancel (unpaid digital orders)
- *                  – loyalty_points (award after delivery)
- *                  – notify_delivery (ping delivery person when order is Ready)
- *
- * Crons
- * ─────
- *   Subscription expiry   – daily 00:15 NPT
- *   OTP cleanup           – daily 01:00 NPT (remove expired pending users)
- *   Subscription pause    – daily 00:30 NPT (extend endDate for paused subs)
- */
 
 const Bull = require("bull");
 const cron = require("node-cron");
@@ -378,13 +360,168 @@ module.exports = {
   scheduleLoyaltyPoints,
   scheduleReferralReward,
 };
+
+// ─── Cron: special session start/end notifications — every 5 minutes ────────
+// Sessions are hour-precise (startHour/endHour, NPT) rather than exact
+// timestamps, so this polls every 5 min and uses startNotifiedAt/
+// endNotifiedAt to make sure each session only fires its start and end
+// notification once, however many times the cron happens to run during
+// that hour.
+cron.schedule("*/5 * * * *", async () => {
+  if (!(await acquireLock("cron:session-notify", 240))) return;
+  try {
+    const SpecialSession = require("../models/SpecialSession");
+    const User = require("../models/User");
+    const Notification = require("../models/Notification");
+    const { sendMulticastPush } = require("../services/fcm.service");
+    const { getNepaliComponents, getNepaliNow } = require("../utils/nepaliTime");
+
+    const { hour, dateStr: today } = getNepaliComponents();
+    const yesterday = new Date(getNepaliNow().getTime() - 24 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10);
+
+    const candidates = await SpecialSession.find({
+      isActive: true,
+      activeDate: { $in: [today, yesterday] },
+      $or: [{ startNotifiedAt: null }, { endNotifiedAt: null }],
+    });
+    if (!candidates.length) return;
+
+    const notify = async (session, { title, body }) => {
+      const users = await User.find({ isActive: true, role: "customer" }, { fcmTokens: 1 });
+      if (!users.length) return;
+      await Notification.insertMany(
+        users.map((u) => ({
+          user: u._id, title, body, type: "promo",
+          data: { sessionId: session._id.toString() },
+          sentVia: ["in_app"],
+        })),
+        { ordered: false }
+      ).catch((err) => logger.error(`[CRON] Session notify insert failed: ${err.message}`));
+
+      const allTokens = users.flatMap((u) => u.fcmTokens || []).filter(Boolean);
+      for (let i = 0; i < allTokens.length; i += 500) {
+        await sendMulticastPush(allTokens.slice(i, i + 500), title, body, { type: "session_promo" }).catch(() => {});
+      }
+    };
+
+    for (const session of candidates) {
+      const crossesMidnight = session.endHour <= session.startHour;
+      const isToday = session.activeDate === today;
+      const isYesterday = session.activeDate === yesterday;
+
+      // Starting now
+      if (isToday && !session.startNotifiedAt && session.startHour === hour) {
+        await notify(session, {
+          title: `${session.displayName} is live! 🔥`,
+          body: session.tagline || `Get ${session.discountPercent}% off select items now.`,
+        });
+        session.startNotifiedAt = new Date();
+        await session.save({ validateBeforeSave: false });
+        logger.info(`[CRON] Session "${session.name}" start notification sent`);
+      }
+
+      // Ending now — same-day session ends today; midnight-crossing session
+      // (activeDate is set to the day it started) ends "tomorrow" relative
+      // to that date, which is today in wall-clock terms.
+      const endMatchesToday = !crossesMidnight && isToday;
+      const endMatchesAfterMidnight = crossesMidnight && isYesterday;
+      if ((endMatchesToday || endMatchesAfterMidnight) && !session.endNotifiedAt && session.endHour === hour) {
+        await notify(session, {
+          title: `${session.displayName} has ended`,
+          body: "Thanks for joining — check back for the next one!",
+        });
+        session.endNotifiedAt = new Date();
+        await session.save({ validateBeforeSave: false });
+        logger.info(`[CRON] Session "${session.name}" end notification sent`);
+      }
+    }
+  } catch (err) {
+    logger.error(`[CRON] Session notify failed: ${err.message}`);
+  }
+});
+
+// ─── Cron: weather-triggered promo — 9:00 AM NPT (3:15 UTC) ─────────────────
+// Similar to Pathao/other food apps: "It's cold today, order something warm!"
+// Opt-in via admin settings (weatherPromo.enabled) and needs kitchenLocation
+// set (reuses the same coordinates the delivery-zone feature uses) — skips
+// silently if either isn't configured, so this is safe to leave off.
+cron.schedule("15 3 * * *", async () => {
+  if (!(await acquireLock("cron:weather-promo", 300))) return;
+  try {
+    const Settings = require("../models/Settings");
+    const User = require("../models/User");
+    const Notification = require("../models/Notification");
+    const { sendMulticastPush } = require("../services/fcm.service");
+    const { getCurrentWeather } = require("../services/weather.service");
+    const { getTodayNP } = require("../utils/nepaliTime");
+
+    const settings = await Settings.getSettings();
+    const promo = settings.weatherPromo || {};
+    if (!promo.enabled) return;
+
+    const { lat, lng } = settings.kitchenLocation || {};
+    if (!lat || !lng) {
+      logger.info("[CRON] Weather promo enabled but kitchenLocation not set — skipping");
+      return;
+    }
+
+    const today = getTodayNP();
+    if (promo.lastSentDate === today) return; // already sent today
+
+    const weather = await getCurrentWeather(lat, lng);
+    if (!weather) return;
+
+    let title = null;
+    let body = null;
+    if (weather.temperatureC < (promo.coldThresholdC ?? 15)) {
+      title = promo.coldTitle || "Brrr, it's cold! ❄️";
+      body = promo.coldMessage || "Warm up with something hot — order now!";
+    } else if (weather.isRainy) {
+      title = promo.rainTitle || "Rainy day? Stay in! ☔";
+      body = promo.rainMessage || "Let us deliver comfort food to your door.";
+    }
+
+    if (!title) return; // weather didn't match any trigger today
+
+    // Fold in the live discount if one's active — ties the weather nudge
+    // to whatever promo is actually running, instead of a static claim.
+    if (settings.globalDiscountPercent > 0) {
+      body = `${body} Enjoy ${settings.globalDiscountPercent}% off right now!`;
+    }
+
+    const customers = await User.find(
+      { isActive: true, role: "customer" },
+      { fcmTokens: 1 }
+    );
+    if (!customers.length) return;
+
+    // In-app notification (bell) for everyone
+    await Notification.insertMany(
+      customers.map((u) => ({ user: u._id, title, body, type: "promo", sentVia: ["in_app"] })),
+      { ordered: false }
+    ).catch((err) => logger.error(`[CRON] Weather promo notification insert failed: ${err.message}`));
+
+    // Push for whoever has the native app + a registered device
+    const allTokens = customers.flatMap((u) => u.fcmTokens || []).filter(Boolean);
+    for (let i = 0; i < allTokens.length; i += 500) {
+      await sendMulticastPush(allTokens.slice(i, i + 500), title, body, { type: "weather_promo" }).catch(() => {});
+    }
+
+    settings.weatherPromo.lastSentDate = today;
+    await settings.save({ validateBeforeSave: false });
+
+    logger.info(`[CRON] Weather promo sent (${weather.temperatureC}°C, rainy=${weather.isRainy}) — ${customers.length} customers, ${allTokens.length} push tokens`);
+  } catch (err) {
+    logger.error(`[CRON] Weather promo failed: ${err.message}`);
+  }
+});
 // -- Cron: Rate Your Meal Reminder (Every 15 mins) --
 cron.schedule('*/15 * * * *', async () => {
   if (!(await acquireLock('cron:rate-meal', 300))) return;
   try {
     const Order = require('../models/Order');
-    const User = require('../models/User');
-    const { sendPushNotification } = require('../services/fcm.service');
+    const Review = require('../models/Review');
 
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const twoAndHalfHoursAgo = new Date(Date.now() - 2.5 * 60 * 60 * 1000);
@@ -396,16 +533,23 @@ cron.schedule('*/15 * * * *', async () => {
     }).populate('customer', 'fcmTokens');
 
     for (const order of orders) {
-      if (order.customer?.fcmTokens?.length) {
-        for (const token of order.customer.fcmTokens) {
-          await sendPushNotification(token, 'How was your meal? ??', 'Tap to rate your recent order and share your feedback!', { orderId: String(order._id), type: 'rate_meal' }).catch(() => {});
-        }
+      if (!order.customer) continue;
+
+      // Skip if they already left a review in the meantime — no need to nag.
+      const alreadyReviewed = await Review.exists({ order: order._id });
+      if (!alreadyReviewed) {
+        await addNotificationJob({
+          userId: order.customer._id.toString(),
+          title: 'How was your meal? 🍽️',
+          body: 'Tap to rate your recent order and share your feedback!',
+          data: { orderId: String(order._id), type: 'rate_meal' },
+        });
       }
       order.reviewNotified = true;
       await order.save({ validateBeforeSave: false });
     }
   } catch (err) {
-    require('../utils/logger').logger.error("[CRON] Rate meal reminder failed: ");
+    logger.error(`[CRON] Rate meal reminder failed: ${err.message}`);
   }
 });
 
@@ -414,7 +558,6 @@ cron.schedule('*/15 * * * *', async () => {
   if (!(await acquireLock('cron:abandoned-cart', 300))) return;
   try {
     const User = require('../models/User');
-    const { sendMulticastPush } = require('../services/fcm.service');
 
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const oneAndHalfHoursAgo = new Date(Date.now() - 90 * 60 * 1000);
@@ -426,14 +569,16 @@ cron.schedule('*/15 * * * *', async () => {
     });
 
     for (const user of users) {
-      if (user.fcmTokens?.length) {
-        await sendMulticastPush(user.fcmTokens, 'You left something delicious! ??', 'Complete your order now before you get too hungry.', { type: 'abandoned_cart' });
-      }
+      await addNotificationJob({
+        userId: user._id.toString(),
+        title: 'You left something delicious! 🛒',
+        body: 'Complete your order now before you get too hungry.',
+        data: { type: 'abandoned_cart' },
+      });
       user.abandonedCartNotified = true;
       await user.save({ validateBeforeSave: false });
     }
   } catch (err) {
-    require('../utils/logger').logger.error("[CRON] Abandoned cart reminder failed: ");
+    logger.error(`[CRON] Abandoned cart reminder failed: ${err.message}`);
   }
 });
-

@@ -6,7 +6,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/store/authStore'
-import { saveAuthSession } from '@shared/auth'
 import { getErrorMessage } from '@/lib/errorMessage'
 import PhoneField from '@/components/auth/PhoneField'
 import PasswordField from '@/components/auth/PasswordField'
@@ -104,7 +103,6 @@ export default function Register() {
     setSubmitting(true)
     try {
       const { data } = await authApi.verifyAndRegister({ phone, otp, name, password, referralCode })
-      saveAuthSession(data.user, data.accessToken, data.refreshToken)
       setAuth(data.user, data.accessToken, data.refreshToken)
       toast.success(`Welcome, ${data.user.name}!`)
       navigate('/', { replace: true })

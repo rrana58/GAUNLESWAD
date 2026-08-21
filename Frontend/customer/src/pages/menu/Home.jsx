@@ -7,6 +7,7 @@ import SpecialSessionBanner from '@/components/menu/SpecialSessionBanner'
 import CategoryChips from '@/components/menu/CategoryChips'
 import MenuItemCard from '@/components/menu/MenuItemCard'
 import PlanCard from '@/components/subscriptions/PlanCard'
+import { useSettingsStore } from '@/store/settingsStore'
 
 export default function Home() {
   const [searchParams] = useSearchParams()
@@ -38,6 +39,9 @@ export default function Home() {
     queryFn: () => subscriptionApi.listPlans().then((r) => r.data.plans),
   })
 
+  const globalDiscountPercent = useSettingsStore((s) => s.globalDiscountPercent)
+  const globalDiscountLabel = useSettingsStore((s) => s.globalDiscountLabel)
+
   const categories = useMemo(
     () => (groupedData || []).map((g) => g.category).filter(Boolean),
     [groupedData]
@@ -57,6 +61,13 @@ export default function Home() {
     return Array.from(new Map(all.map(item => [item._id, item])).values())
   }, [groupedData])
 
+  // All items — flat list, no category grouping, for "All Items" section
+  const allItems = useMemo(() => {
+    if (!groupedData) return []
+    const all = groupedData.flatMap(g => g.items)
+    return Array.from(new Map(all.map(item => [item._id, item])).values())
+  }, [groupedData])
+
   const handleCategorySelect = (categoryId) => {
     if (!categoryId) {
       navigate('/category/all')
@@ -64,8 +75,6 @@ export default function Home() {
       navigate(`/category/${categoryId}`)
     }
   }
-
-  // Removed the useEffect that handled hash scrolling since we now navigate away.
 
   if (searchQuery) {
     return (
@@ -96,6 +105,28 @@ export default function Home() {
           style={{ boxShadow: 'var(--gs-shadow-sm)' }}
         >
           <CategoryChips categories={categories} activeId={null} onSelect={handleCategorySelect} />
+        </div>
+      )}
+
+      {/* Global discount banner */}
+      {globalDiscountPercent > 0 && (
+        <div
+          className="mx-4 mt-4 flex items-center justify-between gap-3 px-4 py-3"
+          style={{
+            borderRadius: 'var(--gs-radius-xl, 1rem)',
+            backgroundColor: 'var(--gs-primary, #1B3A25)',
+            boxShadow: 'var(--gs-shadow-sm)',
+          }}
+        >
+          <p className="font-display text-base leading-tight" style={{ color: 'var(--gs-bg, #FAF8F5)' }}>
+            {globalDiscountLabel}
+          </p>
+          <span
+            className="font-mono font-semibold text-sm shrink-0"
+            style={{ color: 'var(--gs-secondary, #B58A63)' }}
+          >
+            -{globalDiscountPercent}%
+          </span>
         </div>
       )}
 
@@ -141,41 +172,43 @@ export default function Home() {
         </section>
       )}
 
-      {/* Top Drinks Section */}
-      {!isMenuLoading && groupedData?.find(g => g.category.name.toLowerCase() === 'drinks') && (
-        (() => {
-          const drinksGroup = groupedData.find(g => g.category.name.toLowerCase() === 'drinks')
-          const drinksItems = drinksGroup.items.filter(i => !i.isCombo).slice(0, 5) // Show top 5 drinks
-          return drinksItems.length > 0 ? (
-            <section className="pt-6">
-              <h2 className="px-4 font-display text-[1.35rem] font-bold text-foreground mb-3 flex items-center gap-2">
-                🥤 Top Drinks
-              </h2>
-              <div className="flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar" style={{ scrollbarWidth: 'none' }}>
-                {drinksItems.map(item => (
-                  <div key={item._id} className="w-55 shrink-0">
-                    <MenuItemCard item={item} />
+      {/* Featured Category Section (Dynamic: Picks first category with items) */}
+      {!isMenuLoading && groupedData?.length > 0 && (() => {
+        // Pick the first category that has items
+        const featuredGroup = groupedData.find(g => g.items && g.items.length > 0)
+        if (!featuredGroup) return null
+        const itemsToDisplay = featuredGroup.items.filter(i => !i.isCombo).slice(0, 5)
+        if (itemsToDisplay.length === 0) return null
+
+        return (
+          <section className="pt-6">
+            <h2 className="px-4 font-display text-[1.35rem] font-bold text-foreground mb-3 flex items-center gap-2">
+              🔥 {featuredGroup.category?.name || 'Popular'}
+            </h2>
+            <div className="flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar" style={{ scrollbarWidth: 'none' }}>
+              {itemsToDisplay.map(item => (
+                <div key={item._id} className="w-55 shrink-0">
+                  <MenuItemCard item={item} />
+                </div>
+              ))}
+              {/* See More Card */}
+              {featuredGroup.items.length > 5 && (
+                <button
+                  onClick={() => navigate(`/category/${featuredGroup.category._id}`)}
+                  aria-label={`See more ${featuredGroup.category.name}`}
+                  className="w-55 shrink-0 border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary/5 transition-colors active:scale-95 gs-focus-ring"
+                  style={{ borderRadius: 'var(--gs-radius-2xl, 1.5rem)' }}
+                >
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <span className="text-xl" aria-hidden="true">🍲</span>
                   </div>
-                ))}
-                {/* See More Card */}
-                {drinksGroup.items.length > 5 && (
-                  <button
-                    onClick={() => navigate(`/category/${drinksGroup.category._id}`)}
-                    aria-label="See more drinks"
-                    className="w-55 shrink-0 border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-2 text-primary hover:bg-primary/5 transition-colors active:scale-95 gs-focus-ring"
-                    style={{ borderRadius: 'var(--gs-radius-2xl, 1.5rem)' }}
-                  >
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-xl" aria-hidden="true">🍹</span>
-                    </div>
-                    <span className="text-sm font-semibold">See More</span>
-                  </button>
-                )}
-              </div>
-            </section>
-          ) : null
-        })()
-      )}
+                  <span className="text-sm font-semibold">See More</span>
+                </button>
+              )}
+            </div>
+          </section>
+        )
+      })()}
 
       {/* Celebrations Section (Between Top Drinks and Combos) */}
       <section className="pt-4 pb-4 px-4">
@@ -252,6 +285,20 @@ export default function Home() {
                   onSubscribe={() => navigate('/subscriptions')}
                 />
               </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* All Items — flat grid, everything in one list, no category grouping */}
+      {!isMenuLoading && allItems.length > 0 && (
+        <section className="pt-4 pb-6">
+          <h2 className="px-4 font-display text-[1.35rem] font-bold text-foreground mb-3 flex items-center gap-2">
+            🍽️ All Items
+          </h2>
+          <div className="grid grid-cols-2 gap-3 px-4">
+            {allItems.map((item) => (
+              <MenuItemCard key={item._id} item={item} />
             ))}
           </div>
         </section>

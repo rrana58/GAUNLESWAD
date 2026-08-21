@@ -1,22 +1,10 @@
-import { Outlet, useNavigate } from "react";
+import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { LogOut, ChefHat, Wifi, WifiOff, Bell, BellOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSocket } from "../lib/socket";
 import { initPushNotifications } from "../utils/pushNotifications";
 
-/**
- * Layout — Kitchen Display System: Phase 6.0
- *
- * Design System Tokens & WCAG 2.1 AA:
- *  - bg-slate-100/white -> bg-background / bg-card
- *  - text-slate-* -> text-foreground / text-muted-foreground
- *  - border-slate-200 -> border-border
- *  - Accent & badge -> semantic colors + gs-admin-focus-ring
- *  - <header> landmark, <main aria-label="Kitchen Display System">
- *  - Decorative icons aria-hidden="true"
- *  - Sound toggle & Sign Out buttons get descriptive aria-label, aria-pressed, & gs-admin-focus-ring
- */
 
 export default function Layout() {
   const { user, logout } = useAuth();

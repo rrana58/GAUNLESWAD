@@ -5,22 +5,7 @@ import { useCartStore } from '@/store/cartStore'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 
-/**
- * MenuItemCard — Design System: Phase 4.2 Customer Home Migration
- *
- * Changes:
- *  - Card shadow: inline rgba strings → var(--gs-shadow-sm/md)
- *  - Quick-add button: div → button (WCAG: interactive elements must be buttons)
- *  - Quick-add: bg-white → var(--gs-surface); text-primary + hover:bg-primary/text-white retained via Tailwind
- *  - Discount badge: bg-secondary → uses Tailwind secondary (correctly set in customer @theme)
- *  - Veg/spicy badges: bg-white/95 → var(--gs-surface)
- *  - Card border-radius: rounded-2xl → var(--gs-radius-2xl) explicitly
- *  - Added gs-focus-ring for keyboard navigation
- *  - Added ARIA label to card button for screen readers
- *  - aria-label on quick-add button retained and improved
- *
- * No business logic, cart logic, modal logic, or toast behavior changed.
- */
+
 export default function MenuItemCard({ item }) {
   const navigate = useNavigate()
   const price = item.discountedPrice ?? item.basePrice
@@ -43,10 +28,11 @@ export default function MenuItemCard({ item }) {
       return
     }
 
+    
     addItem({
       menuItemId: item._id,
       name: item.name,
-      price: price,
+      price: item.basePrice,
       quantity: 1,
       image: item.image?.url,
     })
@@ -58,14 +44,27 @@ export default function MenuItemCard({ item }) {
     })
   }
 
+  const handleCardActivate = () => openModal(item._id)
+
+  const handleCardKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleCardActivate()
+    }
+  }
+
   return (
-    <button
-      onClick={() => openModal(item._id)}
+  
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardActivate}
+      onKeyDown={handleCardKeyDown}
       aria-label={`View ${item.name} — ${formatNpr(price)}`}
       className={cn(
-        'group flex flex-col overflow-hidden bg-card border border-border text-left w-full relative',
+        'group flex flex-col overflow-hidden bg-card border border-border text-left w-full relative cursor-pointer',
         'active:scale-[0.98] transition-all gs-focus-ring',
-        'rounded-[var(--gs-radius-xl,1rem)]',
+        'rounded-(--gs-radius-xl,1rem)',
       )}
       style={{
         transitionDuration: 'var(--gs-motion-normal, 200ms)',
@@ -126,7 +125,7 @@ export default function MenuItemCard({ item }) {
           </span>
         )}
 
-        {/* Quick-add button — changed from div to button for WCAG */}
+        
         <button
           type="button"
           onClick={handleQuickAdd}
@@ -166,6 +165,6 @@ export default function MenuItemCard({ item }) {
           )}
         </div>
       </div>
-    </button>
+    </div>
   )
 }

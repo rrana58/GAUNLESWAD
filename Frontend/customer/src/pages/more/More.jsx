@@ -14,48 +14,7 @@ import { getErrorMessage } from '@/lib/errorMessage'
 import { formatNpr, cn } from '@/lib/utils'
 import PageHeader from '@/components/layout/PageHeader'
 
-/**
- * More — Design System: Phase 4.7 Profile & Remaining Migration
- *
- * Token changes:
- *  - Hub menu card: rounded-lg → var(--gs-radius-lg)
- *  - Hub item icon avatars: rounded-full → var(--gs-radius-full)
- *  - Hub link/button rows: added gs-focus-ring + min-h-[44px]
- *  - ChevronRight: aria-hidden="true" on all instances
- *  - Announcement buttons: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Announcement icon avatars: rounded-full → var(--gs-radius-full)
- *  - ChevronDown: aria-hidden="true"
- *  - Promo code card: rounded-lg → var(--gs-radius-lg)
- *  - Promo code chip: rounded-md → var(--gs-radius-md)
- *  - Copy button: rounded-md → var(--gs-radius-md) + gs-focus-ring
- *  - Copy icon: aria-hidden="true"
- *  - Job card: rounded-lg → var(--gs-radius-lg)
- *  - Job location pin: aria-hidden="true" on MapPin
- *  - Apply Now button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Job apply form inputs: rounded-lg → var(--gs-radius-lg) + focus-visible:ring-2
- *  - Phone wrapper: rounded-lg → var(--gs-radius-lg)
- *  - Submit button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring + aria-busy
- *  - Contact rows: rounded-lg → var(--gs-radius-lg) on container
- *  - Contact icon avatars: rounded-full → var(--gs-radius-full)
- *  - Contact link rows: gs-focus-ring
- *  - CenteredSpinner: role="status" + aria-label + gs-skeleton alternative
- *  - EmptyState: role="status"
- *
- * Accessibility:
- *  - Hub section: <main> landmark
- *  - Hub item list: role="list" + each item role="listitem"
- *  - Announcements section: <main> + role="list" + aria-expanded on expand buttons
- *  - Promo codes: <main> + role="list"
- *  - Jobs list: <main> + role="list"
- *  - Job apply form: aria-label + aria-required on inputs + aria-busy on submit
- *  - Job submitted: role="status" + CheckCircle2 aria-hidden
- *  - Contact: <main> + contact row links have descriptive aria-label
- *  - About: <main>
- *  - Loading spinner: role="status" + aria-busy + sr-only text
- *  - Empty state: role="status"
- *
- * No API calls, query logic, or navigation changed.
- */
+
 export default function More() {
   const [view, setView] = useState('hub')
 

@@ -3,6 +3,7 @@ const { sendSuccess } = require("../utils/response");
 const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
 const { getRedis } = require("../config/redis");
+const { DELIVERY_FEE } = require("../config/constants");
 
 const CACHE_KEY = "settings:global";
 const CACHE_TTL = 60; // seconds
@@ -23,6 +24,9 @@ exports.updateSettings = catchAsync(async (req, res) => {
     "globalDiscountPercent",
     "globalDiscountLabel",
     "freeDeliveryAbove",
+    "kitchenLocation",
+    "maxDeliveryDistanceKm",
+    "deliveryZones",
     "maintenanceMode",
     "maintenanceMessage",
     "popup", // Added popup to allowed fields
@@ -37,6 +41,17 @@ exports.updateSettings = catchAsync(async (req, res) => {
 
   if (!Object.keys(updates).length)
     throw new AppError("No valid fields to update.", 400);
+
+  if (updates.deliveryZones) {
+    if (!Array.isArray(updates.deliveryZones))
+      throw new AppError("deliveryZones must be an array.", 400);
+    for (const zone of updates.deliveryZones) {
+      if (!Number.isFinite(Number(zone.upToKm)) || !Number.isFinite(Number(zone.fee)))
+        throw new AppError("Each delivery zone needs a valid upToKm and fee.", 400);
+    }
+    // Keep tiers sorted ascending — the lookup logic depends on this order.
+    updates.deliveryZones = [...updates.deliveryZones].sort((a, b) => a.upToKm - b.upToKm);
+  }
 
   let settings = await Settings.getSettings();
   Object.assign(settings, updates);
@@ -60,6 +75,10 @@ exports.getPublicSettings = catchAsync(async (req, res) => {
     maintenanceMode: settings.maintenanceMode,
     maintenanceMessage: settings.maintenanceMessage,
     freeDeliveryAbove: settings.freeDeliveryAbove,
+    deliveryFee: DELIVERY_FEE,
+    kitchenLocation: settings.kitchenLocation?.lat != null ? settings.kitchenLocation : null,
+    maxDeliveryDistanceKm: settings.maxDeliveryDistanceKm ?? null,
+    deliveryZones: settings.deliveryZones || [],
     contactInfo: settings.contactInfo || {},
     aboutUs: settings.aboutUs,
     // Promotional Popup Data

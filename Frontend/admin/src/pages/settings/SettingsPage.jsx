@@ -83,6 +83,9 @@ export default function SettingsPage() {
         globalDiscountPercent: form.globalDiscountPercent,
         globalDiscountLabel: form.globalDiscountLabel,
         freeDeliveryAbove: form.freeDeliveryAbove,
+        kitchenLocation: form.kitchenLocation,
+        maxDeliveryDistanceKm: form.maxDeliveryDistanceKm,
+        deliveryZones: form.deliveryZones || [],
         maintenanceMode: form.maintenanceMode,
         maintenanceMessage: form.maintenanceMessage,
         popup: { ...popupData },
@@ -145,10 +148,11 @@ export default function SettingsPage() {
       {/* Delivery */}
       <section
         aria-label="Delivery settings"
-        className="bg-card border border-border p-5 space-y-4"
+        className="bg-card border border-border p-5 space-y-5"
         style={{ borderRadius: 'var(--gs-admin-radius-xl)' }}
       >
         <h2 className="font-semibold text-foreground">Delivery Settings</h2>
+
         <div className="space-y-1.5 max-w-xs">
           <Label htmlFor="free-delivery-above">Free Delivery Above (Rs.)</Label>
           <Input
@@ -157,6 +161,129 @@ export default function SettingsPage() {
             value={form.freeDeliveryAbove}
             onChange={(e) => set('freeDeliveryAbove', Number(e.target.value))}
           />
+          <p className="text-xs text-muted-foreground">Orders at or above this subtotal always get free delivery, regardless of distance.</p>
+        </div>
+
+        <div className="border-t border-border pt-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Kitchen Location</h3>
+            <p className="text-xs text-muted-foreground">
+              Set this to enable distance-based delivery range &amp; fees below. Leave blank to keep a flat delivery fee with no range limit.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 max-w-md">
+            <div className="space-y-1.5">
+              <Label htmlFor="kitchen-lat">Latitude</Label>
+              <Input
+                id="kitchen-lat"
+                type="number"
+                step="any"
+                placeholder="e.g. 28.209"
+                value={form.kitchenLocation?.lat ?? ''}
+                onChange={(e) =>
+                  set('kitchenLocation', { ...(form.kitchenLocation || {}), lat: e.target.value === '' ? undefined : Number(e.target.value) })
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="kitchen-lng">Longitude</Label>
+              <Input
+                id="kitchen-lng"
+                type="number"
+                step="any"
+                placeholder="e.g. 83.985"
+                value={form.kitchenLocation?.lng ?? ''}
+                onChange={(e) =>
+                  set('kitchenLocation', { ...(form.kitchenLocation || {}), lng: e.target.value === '' ? undefined : Number(e.target.value) })
+                }
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!navigator.geolocation) return toast.error('Location not supported on this device')
+              navigator.geolocation.getCurrentPosition(
+                (pos) => set('kitchenLocation', { lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                () => toast.error('Could not get current location')
+              )
+            }}
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            Use my current location
+          </button>
+        </div>
+
+        <div className="border-t border-border pt-4 space-y-3">
+          <div className="space-y-1.5 max-w-xs">
+            <Label htmlFor="max-delivery-distance">Max Delivery Distance (km)</Label>
+            <Input
+              id="max-delivery-distance"
+              type="number"
+              min="0"
+              placeholder="e.g. 10"
+              value={form.maxDeliveryDistanceKm ?? ''}
+              onChange={(e) => set('maxDeliveryDistanceKm', e.target.value === '' ? undefined : Number(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">Orders from further than this are rejected. Leave blank for no limit.</p>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Delivery Fee by Distance</h3>
+            <p className="text-xs text-muted-foreground">
+              e.g. "up to 3 km → Rs. 30", "up to 7 km → Rs. 50". The first matching tier (by distance) sets the fee.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {(form.deliveryZones || []).map((zone, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">Up to</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  className="w-24"
+                  value={zone.upToKm}
+                  onChange={(e) => {
+                    const zones = [...form.deliveryZones]
+                    zones[idx] = { ...zones[idx], upToKm: Number(e.target.value) }
+                    set('deliveryZones', zones)
+                  }}
+                  aria-label={`Zone ${idx + 1} distance in km`}
+                />
+                <span className="text-xs text-muted-foreground shrink-0">km → Rs.</span>
+                <Input
+                  type="number"
+                  min="0"
+                  className="w-24"
+                  value={zone.fee}
+                  onChange={(e) => {
+                    const zones = [...form.deliveryZones]
+                    zones[idx] = { ...zones[idx], fee: Number(e.target.value) }
+                    set('deliveryZones', zones)
+                  }}
+                  aria-label={`Zone ${idx + 1} fee`}
+                />
+                <button
+                  type="button"
+                  onClick={() => set('deliveryZones', form.deliveryZones.filter((_, i) => i !== idx))}
+                  aria-label={`Remove zone ${idx + 1}`}
+                  className="text-red-500 hover:text-red-600 text-xs font-semibold px-2"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => set('deliveryZones', [...(form.deliveryZones || []), { upToKm: 0, fee: 0 }])}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              + Add distance tier
+            </button>
+          </div>
         </div>
       </section>
 

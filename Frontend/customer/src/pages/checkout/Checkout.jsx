@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect, useId } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Lock, LocateFixed } from 'lucide-react'
+import { Lock, LocateFixed, CheckCircle2, XCircle } from 'lucide-react'
 import { useCartStore } from '@/store/cartStore'
 import { useAuthStore } from '@/store/authStore'
 import { useActiveOrderStore } from '@/store/activeOrderStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import { ordersApi } from '@/api/orders'
 import { getErrorMessage } from '@/lib/errorMessage'
 import { formatNpr, cn } from '@/lib/utils'
@@ -13,45 +14,11 @@ import PageHeader from '@/components/layout/PageHeader'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { addressApi, subscriptionApi } from '@/api/orders'
+import { promoApi } from '@/api/orders'
 import AddressCard from '@/components/addresses/AddressCard'
 import AddressForm from '@/components/addresses/AddressForm'
 
-/**
- * Checkout — Design System: Phase 4.5 Checkout Migration
- *
- * Token changes:
- *  - Closed kitchen banner: bg-red-50 border-red-200 text-red-700 → bg-destructive/10 border-destructive/30 text-destructive; rounded-xl → var(--gs-radius-xl)
- *  - All rounded-lg → var(--gs-radius-lg)
- *  - All inputs/textarea: outline-none focus:border-primary → focus-visible:ring-2 focus-visible:border-primary
- *  - Delivery toggle: rounded-lg → var(--gs-radius-lg); added role="radiogroup" + aria-pressed + gs-focus-ring
- *  - Payment method rows: rounded-lg → var(--gs-radius-lg); added role="radiogroup"
- *  - Wallet label: rounded-lg → var(--gs-radius-lg); explicit id/htmlFor on checkbox
- *  - Add address button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Guest location button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Place Order button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring + active:scale
- *  - Order summary: role="region" + aria-label + aria-live on submitting state
- *
- * Accessibility:
- *  - Closed banner: role="alert" for immediate SR announcement
- *  - Delivery section: role="radiogroup" + aria-labelledby on toggle buttons
- *  - Each delivery toggle: aria-pressed (selected state)
- *  - Delivery address section: aria-labelledby linked to h2
- *  - Guest address inputs: aria-label + aria-required on required field
- *  - Guest detail inputs: aria-label + aria-required + inputMode retained
- *  - Payment section: role="radiogroup" + aria-labelledby; radio aria-label with method name
- *  - Lock icon: aria-hidden="true"
- *  - Wallet section: explicit id="walletToggle" + htmlFor; aria-label with balance
- *  - Coupon input: aria-label + aria-describedby for "next step" note
- *  - Special instructions: aria-label
- *  - Order summary: role="region" aria-label + all price rows aria-label
- *  - submitting state: aria-live="polite" status announcement
- *  - Place Order button: aria-busy + descriptive aria-label with total; gs-focus-ring
- *  - LocateFixed icon: aria-hidden="true"
- *  - <main> landmark for page content
- *  - All sections: aria-labelledby pointing to section h2
- *
- * No business logic, APIs, pricing, validation, or routing changed.
- */
+
 export default function Checkout() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -70,6 +37,9 @@ export default function Checkout() {
   const [deliveryType, setDeliveryType] = useState('delivery')
   const [paymentMethod, setPaymentMethod] = useState('cod')
   const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState(null) // { code, discount, coupon }
+  const [couponError, setCouponError] = useState('')
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
   const [specialInstructions, setSpecialInstructions] = useState('')
   const [useWallet, setUseWallet] = useState(false)
   const [address, setAddress] = useState({ street: '', area: '', city: 'Pokhara', landmark: '' })
@@ -162,10 +132,6 @@ export default function Checkout() {
     for (const item of sortedCart) {
       if (planItems.includes(item.menuItemId) && remaining > 0) {
         const freeQty = Math.min(item.quantity, remaining)
-        // Assume price in cart includes addons. In backend, free meal covers unitPrice (base/variant), not addons.
-        // For simplicity in UI, if we don't have separate basePrice in cart, we can just estimate it.
-        // But cart item doesn't store base price separately, it just has 'price'.
-        // Let's discount the full item.price. It's a UI approximation before backend recalculates.
         discount += item.price * freeQty
         remaining -= freeQty
       }
@@ -174,12 +140,85 @@ export default function Checkout() {
   }, [items, mySubData])
 
   const displaySubtotal = Math.max(0, subtotal - subscriptionDiscount)
-  const preTaxSubtotal = displaySubtotal / 1.13
-  const vatAmount = displaySubtotal - preTaxSubtotal
 
-  const deliveryFee = (deliveryType === 'pickup' || displaySubtotal >= 500 || subscriptionDiscount > 0) ? 0 : 50
-  const walletDiscountValue = (useWallet && user?.loyaltyPoints) ? Math.min(user.loyaltyPoints, displaySubtotal + deliveryFee) : 0
-  const finalTotal = Math.max(0, displaySubtotal + deliveryFee - walletDiscountValue)
+  const maintenanceMode = useSettingsStore((s) => s.maintenanceMode)
+  const maintenanceMessage = useSettingsStore((s) => s.maintenanceMessage)
+  const globalDiscountPercent = useSettingsStore((s) => s.globalDiscountPercent)
+  const globalDiscountLabel = useSettingsStore((s) => s.globalDiscountLabel)
+  const freeDeliveryAbove = useSettingsStore((s) => s.freeDeliveryAbove)
+  const settingsDeliveryFee = useSettingsStore((s) => s.deliveryFee)
+  const kitchenLocation = useSettingsStore((s) => s.kitchenLocation)
+  const maxDeliveryDistanceKm = useSettingsStore((s) => s.maxDeliveryDistanceKm)
+  const deliveryZones = useSettingsStore((s) => s.deliveryZones)
+
+  
+  const selectedCoordinates = useMemo(() => {
+    if (deliveryType === 'pickup') return null
+    if (isAuthenticated) {
+      return savedAddresses?.find((a) => a._id === selectedAddressId)?.coordinates || null
+    }
+    return address.coordinates || null
+  }, [deliveryType, isAuthenticated, savedAddresses, selectedAddressId, address.coordinates])
+
+  
+  const distanceKm = useMemo(() => {
+    if (!kitchenLocation?.lat || !selectedCoordinates?.lat) return null
+    const toRad = (d) => (d * Math.PI) / 180
+    const R = 6371
+    const dLat = toRad(selectedCoordinates.lat - kitchenLocation.lat)
+    const dLng = toRad(selectedCoordinates.lng - kitchenLocation.lng)
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(kitchenLocation.lat)) * Math.cos(toRad(selectedCoordinates.lat)) * Math.sin(dLng / 2) ** 2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  }, [kitchenLocation, selectedCoordinates])
+
+  const outOfDeliveryRange = deliveryType !== 'pickup' &&
+    !!maxDeliveryDistanceKm && distanceKm != null && distanceKm > maxDeliveryDistanceKm
+
+  const zoneDeliveryFee = useMemo(() => {
+    if (distanceKm == null || !deliveryZones?.length) return settingsDeliveryFee
+    const zone = deliveryZones.find((z) => distanceKm <= z.upToKm)
+    return zone ? zone.fee : deliveryZones[deliveryZones.length - 1].fee
+  }, [distanceKm, deliveryZones, settingsDeliveryFee])
+
+  
+  const globalDiscountValue = globalDiscountPercent > 0
+    ? Math.round(displaySubtotal * (globalDiscountPercent / 100))
+    : 0
+  const discountedSubtotal = Math.max(0, displaySubtotal - globalDiscountValue)
+
+  const preTaxSubtotal = discountedSubtotal / 1.13
+  const vatAmount = discountedSubtotal - preTaxSubtotal
+
+  const deliveryFee = (deliveryType === 'pickup' || discountedSubtotal >= freeDeliveryAbove || subscriptionDiscount > 0) ? 0 : zoneDeliveryFee
+  const couponDiscountValue = appliedCoupon?.discount || 0
+  const walletDiscountValue = (useWallet && user?.loyaltyPoints)
+    ? Math.min(user.loyaltyPoints, Math.max(0, discountedSubtotal + deliveryFee - couponDiscountValue))
+    : 0
+  const finalTotal = Math.max(0, discountedSubtotal + deliveryFee - couponDiscountValue - walletDiscountValue)
+
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim()
+    if (!code) return
+    setValidatingCoupon(true)
+    setCouponError('')
+    try {
+      const { data } = await promoApi.validate(code, discountedSubtotal)
+      setAppliedCoupon({ code: data.coupon.code, discount: data.discount, coupon: data.coupon })
+      setCouponCode(data.coupon.code)
+    } catch (err) {
+      setAppliedCoupon(null)
+      setCouponError(getErrorMessage(err))
+    } finally {
+      setValidatingCoupon(false)
+    }
+  }
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponError('')
+    setCouponCode('')
+  }
 
   const { data: closedDatesRes } = useQuery({
     queryKey: ['closed-dates'],
@@ -197,6 +236,8 @@ export default function Checkout() {
   const canSubmit =
     items.length > 0 &&
     !closedTodayInfo &&
+    !maintenanceMode &&
+    !outOfDeliveryRange &&
     (deliveryType === 'pickup' ||
       (isAuthenticated ? !!selectedAddressId : address.street.trim().length > 0)) &&
     (isAuthenticated || (guestInfo.name.trim().length > 0 && /^9[678]\d{8}$/.test(guestInfo.phone)))
@@ -209,7 +250,7 @@ export default function Checkout() {
         deliveryType,
         paymentMethod,
         specialInstructions: specialInstructions.trim() || undefined,
-        couponCode: couponCode.trim() || undefined,
+        couponCode: appliedCoupon?.code || undefined,
         useWallet,
       }
       if (deliveryType !== 'pickup') {
@@ -237,13 +278,7 @@ export default function Checkout() {
       const { data } = await ordersApi.placeOrder(payload)
       clearCart()
 
-      // Go straight to the tracking page with `replace: true` — this drops
-      // the /checkout entry from history entirely instead of leaving it
-      // behind with an emptied cart. Without this, pressing back from the
-      // tracking page lands on a stale, broken checkout screen with no way
-      // back to the order. The "order placed" confirmation now lives on the
-      // tracking page itself (via location.state) so guests still get their
-      // tracking link before leaving.
+      
       const ref = isAuthenticated ? data.order._id : data.order.trackingToken
       setActiveOrder(ref)
       navigate(`/track/${ref}`, {
@@ -288,6 +323,33 @@ export default function Checkout() {
         >
           <p className="font-bold mb-1">Kitchen is Closed Today</p>
           <p>{closedTodayInfo.reason || 'We are not accepting orders today.'}</p>
+        </div>
+      )}
+
+      {/* Maintenance mode alert */}
+      {!closedTodayInfo && maintenanceMode && (
+        <div
+          role="alert"
+          className="mx-4 mt-4 bg-destructive/10 border border-destructive/30 text-destructive p-4 text-sm"
+          style={{ borderRadius: 'var(--gs-radius-xl, 1rem)' }}
+        >
+          <p className="font-bold mb-1">Ordering Temporarily Unavailable</p>
+          <p>{maintenanceMessage || 'We are temporarily unable to accept orders. Please try again shortly.'}</p>
+        </div>
+      )}
+
+      {/* Out of delivery range alert */}
+      {!closedTodayInfo && !maintenanceMode && outOfDeliveryRange && (
+        <div
+          role="alert"
+          className="mx-4 mt-4 bg-destructive/10 border border-destructive/30 text-destructive p-4 text-sm"
+          style={{ borderRadius: 'var(--gs-radius-xl, 1rem)' }}
+        >
+          <p className="font-bold mb-1">Outside Our Delivery Area</p>
+          <p>
+            That address is about {distanceKm.toFixed(1)} km away — we currently deliver up to {maxDeliveryDistanceKm} km.
+            Try pickup, or choose a closer address.
+          </p>
         </div>
       )}
 
@@ -601,24 +663,56 @@ export default function Checkout() {
           >
             Coupon code (optional)
           </h2>
-          <input
-            name="couponCode"
-            id="couponCode"
-            value={couponCode}
-            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-            placeholder="E.g. WELCOME10"
-            aria-label="Coupon code (optional)"
-            aria-describedby={couponCode.trim() ? couponNoteId : undefined}
-            className={`${inputClass} font-mono uppercase`}
-            style={inputStyle}
-          />
-          {couponCode.trim() && (
+          {appliedCoupon ? (
+            <div
+              className="flex items-center justify-between gap-3 border border-primary/30 bg-primary/5 px-3 py-2.5"
+              style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 size={16} className="text-primary shrink-0" aria-hidden="true" />
+                <span className="text-sm font-mono font-semibold text-foreground truncate">{appliedCoupon.code}</span>
+                <span className="text-xs text-primary font-semibold shrink-0">- {formatNpr(appliedCoupon.discount)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveCoupon}
+                className="text-xs font-semibold text-muted-foreground hover:text-destructive shrink-0"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                name="couponCode"
+                id="couponCode"
+                value={couponCode}
+                onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError('') }}
+                placeholder="E.g. WELCOME10"
+                aria-label="Coupon code (optional)"
+                aria-describedby={couponError ? couponNoteId : undefined}
+                className={`${inputClass} font-mono uppercase flex-1`}
+                style={inputStyle}
+              />
+              <button
+                type="button"
+                onClick={handleApplyCoupon}
+                disabled={!couponCode.trim() || validatingCoupon}
+                className="px-4 text-sm font-semibold border border-border disabled:opacity-40 shrink-0"
+                style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
+              >
+                {validatingCoupon ? 'Checking…' : 'Apply'}
+              </button>
+            </div>
+          )}
+          {couponError && (
             <p
               id={couponNoteId}
-              className="text-xs text-muted-foreground mt-1"
-              role="note"
+              className="text-xs text-destructive mt-1.5 flex items-center gap-1"
+              role="alert"
             >
-              * Coupon discount will be applied on the next step.
+              <XCircle size={12} aria-hidden="true" />
+              {couponError}
             </p>
           )}
         </section>
@@ -676,6 +770,30 @@ export default function Checkout() {
             {formatNpr(vatAmount)}
           </span>
         </div>
+
+        {/* Coupon discount */}
+        {couponDiscountValue > 0 && (
+          <div
+            className="flex items-center justify-between text-sm text-primary -mt-2"
+            role="status"
+            aria-label={`Coupon ${appliedCoupon.code} applied: ${formatNpr(couponDiscountValue)}`}
+          >
+            <span>Coupon ({appliedCoupon.code})</span>
+            <span className="font-mono font-semibold">- {formatNpr(couponDiscountValue)}</span>
+          </div>
+        )}
+
+        {/* Global discount */}
+        {globalDiscountValue > 0 && (
+          <div
+            className="flex items-center justify-between text-sm text-primary -mt-2"
+            role="status"
+            aria-label={`${globalDiscountLabel} applied: ${formatNpr(globalDiscountValue)}`}
+          >
+            <span>{globalDiscountLabel}</span>
+            <span className="font-mono font-semibold">- {formatNpr(globalDiscountValue)}</span>
+          </div>
+        )}
 
         {/* Subscription discount */}
         {subscriptionDiscount > 0 && (
@@ -740,6 +858,10 @@ export default function Checkout() {
           aria-label={
             closedTodayInfo
               ? 'Kitchen is closed today'
+              : maintenanceMode
+              ? 'Ordering is temporarily unavailable'
+              : outOfDeliveryRange
+              ? 'Address is outside our delivery area'
               : submitting
               ? 'Placing your order...'
               : `Place order — Total: ${formatNpr(finalTotal)}`
@@ -747,7 +869,15 @@ export default function Checkout() {
           className="py-3 text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-40 active:scale-[0.98] transition-transform gs-focus-ring"
           style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
         >
-          {closedTodayInfo ? 'Closed Today' : submitting ? 'Placing order...' : 'Place order'}
+          {closedTodayInfo
+            ? 'Closed Today'
+            : maintenanceMode
+            ? 'Unavailable'
+            : outOfDeliveryRange
+            ? 'Outside Delivery Area'
+            : submitting
+            ? 'Placing order...'
+            : 'Place order'}
         </button>
       </section>
     </div>

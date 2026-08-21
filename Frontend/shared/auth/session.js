@@ -1,61 +1,59 @@
-/**
- * Shared session persistence helper across all 4 frontend portals.
- * Ensures local storage tokens and Zustand state hydration sync seamlessly.
- */
 
-export function saveAuthSession(user, accessToken, refreshToken) {
+
+const ZUSTAND_KEY = {
+  admin: 'gharko-admin-auth',
+  customer: 'gharko-swad-auth',
+};
+
+export function saveAuthSession(user, accessToken, refreshToken, app) {
   if (!user || !accessToken) return;
 
-  // 1. Standard localStorage keys (used by kitchen, rider, and direct API interceptors)
+  if (app === 'admin' || app === 'customer') {
+    const authData = {
+      state: {
+        user,
+        accessToken,
+        refreshToken: refreshToken || '',
+        isAuthenticated: true,
+      },
+      version: 0,
+    };
+    localStorage.setItem(ZUSTAND_KEY[app], JSON.stringify(authData));
+    return;
+  }
+
+  // kitchen / rider — flat keys, no zustand persist involved
   localStorage.setItem('token', accessToken);
   if (refreshToken) {
     localStorage.setItem('refreshToken', refreshToken);
   }
   localStorage.setItem('user', JSON.stringify(user));
-
-  const authData = {
-    state: {
-      user,
-      accessToken,
-      refreshToken: refreshToken || '',
-      isAuthenticated: true,
-    },
-    version: 0,
-  };
-
-  // 2. Zustand persist key for Admin portal
-  localStorage.setItem('gharko-admin-auth', JSON.stringify(authData));
-
-  // 3. Zustand persist key for Customer portal
-  localStorage.setItem('gharko-swad-auth', JSON.stringify(authData));
 }
 
-export function clearAuthSession() {
+export function clearAuthSession(app) {
+  if (app === 'admin' || app === 'customer') {
+    localStorage.removeItem(ZUSTAND_KEY[app]);
+    return;
+  }
+  // kitchen / rider
   localStorage.removeItem('token');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
-  localStorage.removeItem('gharko-admin-auth');
-  localStorage.removeItem('gharko-swad-auth');
 }
 
-export function getStoredUser() {
+export function getStoredUser(app) {
   try {
+    if (app === 'admin' || app === 'customer') {
+      const raw = localStorage.getItem(ZUSTAND_KEY[app]);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?.state?.user || null;
+    }
+    // kitchen / rider
     const raw = localStorage.getItem('user');
-    if (raw) return JSON.parse(raw);
-
-    const adminRaw = localStorage.getItem('gharko-admin-auth');
-    if (adminRaw) {
-      const parsed = JSON.parse(adminRaw);
-      if (parsed?.state?.user) return parsed.state.user;
-    }
-
-    const customerRaw = localStorage.getItem('gharko-swad-auth');
-    if (customerRaw) {
-      const parsed = JSON.parse(customerRaw);
-      if (parsed?.state?.user) return parsed.state.user;
-    }
+    return raw ? JSON.parse(raw) : null;
   } catch (e) {
     console.error('Failed to parse stored user:', e);
+    return null;
   }
-  return null;
 }

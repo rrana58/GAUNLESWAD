@@ -1,12 +1,4 @@
-/**
- * middleware/operatingHours.js
- *
- * Blocks order placement outside kitchen operating hours.
- * Hours are configured via KITCHEN_OPEN_HOUR / KITCHEN_CLOSE_HOUR env vars
- * (Nepal Time, 24-hour, defaults 7–22).
- *
- * Admins can bypass this check (for test orders, manual entries, etc.)
- */
+
 const AppError = require("../utils/AppError");
 
 // Nepal Standard Time is UTC+5:45

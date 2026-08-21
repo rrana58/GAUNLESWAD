@@ -17,51 +17,7 @@ import AddressCard from '@/components/addresses/AddressCard'
 import AddressForm from '@/components/addresses/AddressForm'
 import { addressApi } from '@/api/orders'
 
-/**
- * Profile — Design System: Phase 4.7 Profile & Remaining Migration
- *
- * Token changes:
- *  - OverviewView:
- *    - Referral card: rounded-lg → var(--gs-radius-lg)
- *    - Referral "Get Rs 50 Coupon" badge: rounded-full → var(--gs-radius-full)
- *    - Referral inner copy row: rounded-lg → var(--gs-radius-lg)
- *    - Copy button: rounded-md → var(--gs-radius-md) + gs-focus-ring
- *    - Menu list container: rounded-lg → var(--gs-radius-lg)
- *    - Logout button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *    - Delete account button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - StatTile: rounded-lg → var(--gs-radius-lg)
- *  - MenuRow: min-h-[44px] + gs-focus-ring
- *  - EditProfileView inputs: rounded-lg → var(--gs-radius-lg) + focus-visible:ring-2
- *  - EditProfileView save button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring + aria-busy
- *  - ChangePasswordView send/update buttons: rounded-lg → var(--gs-radius-lg) + gs-focus-ring + aria-busy
- *  - LoginHistoryView: loading → gs-skeleton; card: rounded-lg → var(--gs-radius-lg)
- *  - DeleteAccountView warning: rounded-lg → var(--gs-radius-lg)
- *  - DeleteAccountView delete button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring + aria-busy
- *  - AddressesView add button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - AddressesView loading → gs-skeleton
- *
- * Accessibility:
- *  - All views wrapped in <main> or appropriate landmark
- *  - OverviewView: user name as aria-label on header
- *  - Stats grid: role="list" + dl semantics
- *  - Referral card: aria-label + role="region"
- *  - Copy button: descriptive aria-label
- *  - Copy icon: aria-hidden
- *  - Menu list: nav + role="list"
- *  - MenuRow: aria-label + ChevronRight aria-hidden
- *  - LogOut/Trash2/LogOut icons: aria-hidden
- *  - Logout buttons: descriptive aria-label + aria-busy
- *  - Delete account button: aria-label
- *  - EditProfileView inputs: aria-label + aria-required
- *  - Save button: aria-busy
- *  - Cancel links: gs-focus-ring
- *  - ChangePasswordView: aria-busy on send/update
- *  - LoginHistoryView: role="list" on entries; loading gs-skeleton
- *  - DeleteAccountView: role="alert" on warning; aria-busy on delete; checkbox id/htmlFor
- *  - AddressesView: loading gs-skeleton; add button aria-label + gs-focus-ring
- *
- * No API, auth, query, or navigation logic changed.
- */
+
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(60),

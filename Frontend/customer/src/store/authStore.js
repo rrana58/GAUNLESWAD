@@ -18,7 +18,7 @@ export const useAuthStore = create(
       updateUser: (user) => set({ user }),
 
       logout: () => {
-        clearAuthSession()
+        clearAuthSession('customer')
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
         useCartStore.getState().clear()
       },

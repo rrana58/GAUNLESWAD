@@ -1,6 +1,3 @@
-/**
- * Gharko Swaad Design System — Border Radius Tokens
- */
 
 export const radius = {
   sm: '0.375rem', /* 6px */

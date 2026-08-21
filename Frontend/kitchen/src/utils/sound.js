@@ -19,11 +19,7 @@ function getContext() {
   return audioCtx
 }
 
-/**
- * Plays a short two-tone chime to announce a new order.
- * Identical to the admin panel sound — generated with Web Audio API,
- * no sound file needed.
- */
+
 export function playNotificationSound() {
   try {
     const ctx = getContext()

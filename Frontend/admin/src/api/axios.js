@@ -26,6 +26,7 @@ attachSingleFlightRefresh(api, {
   },
   onRefreshFailed: () => useAuthStore.getState().logout?.(),
   loginPath: '/login',
+  storageKey: 'gharko-admin-auth',
 })
 
 export default api

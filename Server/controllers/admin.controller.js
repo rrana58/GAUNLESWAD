@@ -462,7 +462,11 @@ exports.bulkUpdatePrices = catchAsync(async (req, res) => {
   }
 
   const filter = {};
-  if (categoryId) filter.category = categoryId;
+  // Match either the legacy single "category" field or membership in the
+  // "categories" array — mirrors menu.controller.js's getMenu filter.
+  // Items can have several categories with only the first stored as the
+  // legacy field, so filtering by "category" alone silently missed items.
+  if (categoryId) filter.$or = [{ category: categoryId }, { categories: categoryId }];
 
   const items = await MenuItem.find(filter);
   if (items.length === 0) throw new AppError("No items matched the filter", 404);

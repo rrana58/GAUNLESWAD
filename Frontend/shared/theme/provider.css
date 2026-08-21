@@ -1,21 +1,4 @@
-/**
- * Gharko Swaad — Centralized Theme Provider
- *
- * Architecture Decision:
- * All 4 apps use Tailwind CSS v4 with @theme blocks that consume CSS custom properties.
- * The correct Theme Provider for this stack is NOT a React context — it is a shared
- * CSS layer that injects the authoritative Gharko Swaad design tokens as CSS variables.
- * Each app's index.css imports this file as its single source of brand truth, while
- * keeping its own app-specific Tailwind @theme mappings.
- *
- * Usage in each app's index.css:
- *   @import "@shared/theme/provider.css";
- *
- * The React ThemeProvider component wraps apps to enable future JS-level theming
- * (dark mode, user preferences) without breaking the CSS variable foundation.
- */
 
-/* ─── Gharko Swaad Brand Color Variables ─────────────────────────────────── */
 :root {
   /* Primary: Forest Green */
   --gs-primary: #1B3A25;

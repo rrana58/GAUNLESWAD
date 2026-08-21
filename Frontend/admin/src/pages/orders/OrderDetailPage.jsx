@@ -1,69 +1,22 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getOrder, updateOrderStatus } from '@/api/orders'
+import { getOrder, updateOrderStatus, cancelOrder, editOrder } from '@/api/orders'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import {
   ArrowLeft, Printer, MapPin, Clock, User, Phone,
-  Wallet, Ticket, StickyNote, CheckCircle2, Circle,
+  Wallet, Ticket, StickyNote, CheckCircle2, Circle, Edit3, XCircle,
+  Plus, Search, ArrowLeftCircle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { STATUS_COLORS, NEXT_STATUS, NEXT_LABEL } from '@/lib/orderConstants'
 import Spinner from '@/components/ui/Spinner'
 import StatusBadge from '@/components/ui/StatusBadge'
-
-/**
- * OrderDetailPage — Design System: Phase 5.3
- *
- * Token changes:
- *  - bg-white → bg-card on all panel cards
- *  - border-gray-100 → border-border
- *  - border-gray-50 → border-border on item dividers
- *  - text-gray-900 → text-foreground
- *  - text-gray-800 → text-foreground
- *  - text-gray-700 → text-foreground
- *  - text-gray-600 → text-muted-foreground
- *  - text-gray-500/400 → text-muted-foreground (and /60 variant)
- *  - rounded-xl → var(--gs-admin-radius-xl)
- *  - rounded-full (status, plan badge) → var(--gs-admin-radius-full)
- *  - bg-orange-500 (next action CTA) → var(--gs-admin-accent)
- *  - text-orange-500 (timeline check icon) → text-[var(--gs-admin-accent)]
- *  - bg-orange-400 (timeline connector) → var(--gs-admin-accent)
- *  - text-gray-200 (pending circle) → text-border (muted ring)
- *  - bg-gray-200 (pending connector) → bg-border
- *  - bg-gray-50 (admin note card) → bg-muted (neutral semantic)
- *  - Inline payment status span → <StatusBadge status={paymentStatus}>
- *  - Cancelled/refunded span → <StatusBadge status={order.status}>
- *  - Loader2 loading → <Spinner>
- *  - Loader2 in next-action button → <Spinner size="sm">
- *  - "Order not found" panel bg-white → bg-card
- *
- * Preserved (intentional semantic colours):
- *  - bg-amber-50 text-amber-600/700 (special instructions)
- *  - bg-red-50 text-red-600/700 (cancellation reason)
- *  - bg-green-100 text-green-700 (plan meal free badge)
- *  - text-green-600 (coupon discount)
- *  - Print block: font-mono text-black border-dashed border-black (intentional print CSS)
- *
- * Accessibility:
- *  - <main aria-label="Order #{n} details"> wraps screen content
- *  - Back button: existing aria-label="Back to orders" preserved; ArrowLeft aria-hidden
- *  - Print button: aria-label added; Printer icon aria-hidden
- *  - Next-action button: aria-busy + aria-label; Loader2 → Spinner
- *  - Status timeline: <ol aria-label> + <li> with aria-current="step" on active
- *  - Timeline CheckCircle2/Circle icons: aria-hidden
- *  - Items list: <ul aria-label> + <li> (replaces div.space-y-3 + div)
- *  - Sidebar cards: role="region" + aria-labelledby on each
- *  - Sidebar info icons (User/Phone/MapPin/Clock/Wallet/Ticket/StickyNote): aria-hidden
- *  - Payment sidebar: StatusBadge replaces inline coloured span
- *  - Special instructions card: StickyNote icon aria-hidden
- *  - Admin note card: StickyNote icon aria-hidden
- *  - Cancellation reason card: role="region" aria-label
- *  - Error state: role="alert"
- *  - Print block: unchanged (non-interactive, print-only)
- *
- * No query, mutation, routing, or state logic changed.
- */
+import Modal from '@/components/ui/Modal'
+import { getAdminMenuItems } from '@/api/menu'
 
 const TIMELINE_STEPS = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered']
 
@@ -79,6 +32,21 @@ export default function OrderDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [cancelModal, setCancelModal] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [editNoteModal, setEditNoteModal] = useState(false)
+  const [specialNoteText, setSpecialNoteText] = useState('')
+  const [editItemsModal, setEditItemsModal] = useState(false)
+  const [draftItems, setDraftItems] = useState([])
+  const [pendingAddItems, setPendingAddItems] = useState([])
+  const [showAddPicker, setShowAddPicker] = useState(false)
+  const [pickerSearch, setPickerSearch] = useState('')
+  const [pickerMenuItems, setPickerMenuItems] = useState([])
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerSelected, setPickerSelected] = useState(null) // the menu item currently being configured
+  const [pickerVariantId, setPickerVariantId] = useState(null)
+  const [pickerAddonIds, setPickerAddonIds] = useState([])
+  const [pickerQty, setPickerQty] = useState(1)
 
   const { data: order, isLoading, isError } = useQuery({
     queryKey: ['order', id],
@@ -96,6 +64,107 @@ export default function OrderDetailPage() {
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Update failed'),
   })
+
+  const cancelMut = useMutation({
+    mutationFn: (reason) => cancelOrder(id, reason),
+    onSuccess: () => {
+      toast.success('Order cancelled successfully')
+      setCancelModal(false)
+      setCancelReason('')
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Cancellation failed'),
+  })
+
+  const editMut = useMutation({
+    mutationFn: (data) => editOrder(id, data),
+    onSuccess: () => {
+      toast.success('Order instructions updated')
+      setEditNoteModal(false)
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Edit failed'),
+  })
+
+  const editItemsMut = useMutation({
+    mutationFn: (data) => editOrder(id, data),
+    onSuccess: () => {
+      toast.success('Order items updated')
+      setEditItemsModal(false)
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update items'),
+  })
+
+  const openAddPicker = () => {
+    setShowAddPicker(true)
+    setPickerSelected(null)
+    setPickerSearch('')
+    loadPickerItems('')
+  }
+
+  const loadPickerItems = async (term) => {
+    setPickerLoading(true)
+    try {
+      const { data } = await getAdminMenuItems({ isAvailable: true, limit: 30, search: term || undefined })
+      setPickerMenuItems(data.items || [])
+    } catch {
+      toast.error('Failed to load menu')
+    } finally {
+      setPickerLoading(false)
+    }
+  }
+
+  // Debounced live search against the backend — scales to any menu size
+  // instead of relying on a capped client-side list.
+  const pickerSearchTimer = useRef(null)
+  useEffect(() => {
+    if (!showAddPicker || pickerSelected) return
+    if (pickerSearchTimer.current) clearTimeout(pickerSearchTimer.current)
+    pickerSearchTimer.current = setTimeout(() => {
+      loadPickerItems(pickerSearch)
+    }, 300)
+    return () => clearTimeout(pickerSearchTimer.current)
+  }, [pickerSearch, showAddPicker])
+
+  const selectPickerItem = (item) => {
+    setPickerSelected(item)
+    const firstAvailableVariant = item.variants?.find((v) => v.isAvailable)
+    setPickerVariantId(firstAvailableVariant?._id || null)
+    setPickerAddonIds([])
+    setPickerQty(1)
+  }
+
+  const confirmAddPickedItem = () => {
+    const item = pickerSelected
+    if (!item) return
+    const variant = item.variants?.find((v) => v._id === pickerVariantId)
+    const addons = (item.addons || []).filter((a) => pickerAddonIds.includes(a._id))
+    const unitPrice = variant ? variant.price : item.basePrice
+    setPendingAddItems((prev) => [
+      ...prev,
+      {
+        tempId: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        menuItemId: item._id,
+        name: item.name,
+        variantId: variant?._id || undefined,
+        variantName: variant?.name,
+        addonIds: addons.map((a) => a._id),
+        addonNames: addons.map((a) => a.name),
+        unitPrice,
+        addonsTotal: addons.reduce((s, a) => s + a.price, 0),
+        quantity: pickerQty,
+      },
+    ])
+    setShowAddPicker(false)
+    setPickerSelected(null)
+  }
+
+  const filteredPickerItems = pickerMenuItems.filter((m) =>
+    m.name.toLowerCase().includes(pickerSearch.toLowerCase())
+  )
 
   if (isLoading) {
     return (
@@ -155,6 +224,20 @@ export default function OrderDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!isCancelled && order.status !== 'delivered' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCancelReason('')
+                setCancelModal(true)
+              }}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 gs-admin-focus-ring"
+            >
+              <XCircle size={14} className="mr-2" aria-hidden="true" />
+              Cancel Order
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -271,12 +354,31 @@ export default function OrderDetailPage() {
             aria-labelledby="items-heading"
             style={{ borderRadius: 'var(--gs-admin-radius-xl)' }}
           >
-            <p
-              id="items-heading"
-              className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3"
-            >
-              Items
-            </p>
+            <div className="flex justify-between items-center mb-3">
+              <p
+                id="items-heading"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
+                Items
+              </p>
+              {!isCancelled && order.status !== 'delivered' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDraftItems(order.items.map((it) => ({ ...it })))
+                    setPendingAddItems([])
+                    setShowAddPicker(false)
+                    setPickerSelected(null)
+                    setEditItemsModal(true)
+                  }}
+                  className="h-8 px-2 text-xs font-semibold gs-admin-focus-ring"
+                >
+                  <Edit3 size={13} className="mr-1" />
+                  Edit Items
+                </Button>
+              )}
+            </div>
             <ul className="space-y-3" aria-label="Order items">
               {order.items?.map((item, i) => (
                 <li
@@ -334,34 +436,49 @@ export default function OrderDetailPage() {
           </section>
 
           {/* Special instructions & admin note */}
-          {(order.specialInstructions || order.adminNote) && (
-            <div className="space-y-3">
-              {order.specialInstructions && (
-                <div
-                  className="bg-amber-50 p-4 flex gap-3"
-                  style={{ borderRadius: 'var(--gs-admin-radius-xl)' }}
-                >
-                  <StickyNote size={16} className="text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
-                  <div>
-                    <p className="text-xs font-medium text-amber-700 mb-1">Special Instructions</p>
-                    <p className="text-sm text-amber-700">{order.specialInstructions}</p>
-                  </div>
+          <div className="space-y-3">
+            <div
+              className="bg-amber-50 p-4 flex items-start justify-between gap-3 border border-amber-200"
+              style={{ borderRadius: 'var(--gs-admin-radius-xl)' }}
+            >
+              <div className="flex gap-3">
+                <StickyNote size={16} className="text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
+                <div>
+                  <p className="text-xs font-medium text-amber-700 mb-1">Special Instructions</p>
+                  <p className="text-sm text-amber-900 font-medium">
+                    {order.specialInstructions || <span className="italic text-amber-600/70">No special instructions provided</span>}
+                  </p>
                 </div>
-              )}
-              {order.adminNote && (
-                <div
-                  className="bg-muted p-4 flex gap-3"
-                  style={{ borderRadius: 'var(--gs-admin-radius-xl)' }}
+              </div>
+              {!isCancelled && order.status !== 'delivered' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSpecialNoteText(order.specialInstructions || '')
+                    setEditNoteModal(true)
+                  }}
+                  className="h-8 px-2 bg-amber-100/50 hover:bg-amber-100 text-amber-800 border-amber-300 gs-admin-focus-ring"
                 >
-                  <StickyNote size={16} className="text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Admin Note</p>
-                    <p className="text-sm text-muted-foreground">{order.adminNote}</p>
-                  </div>
-                </div>
+                  <Edit3 size={13} className="mr-1" aria-hidden="true" />
+                  Edit
+                </Button>
               )}
             </div>
-          )}
+
+            {order.adminNote && (
+              <div
+                className="bg-muted p-4 flex gap-3"
+                style={{ borderRadius: 'var(--gs-admin-radius-xl)' }}
+              >
+                <StickyNote size={16} className="text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Admin Note</p>
+                  <p className="text-sm text-muted-foreground">{order.adminNote}</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Sidebar column ──────────────────────────────────────── */}
@@ -534,6 +651,411 @@ export default function OrderDetailPage() {
         )}
         <p className="text-center text-xs mt-3">Thank you! · Dhanyabad!</p>
       </div>
+
+      {/* Cancel Order Modal */}
+      {cancelModal && (
+        <Modal
+          open
+          onClose={() => setCancelModal(false)}
+          title={`Cancel Order #${order.orderNumber}`}
+          size="sm"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!cancelReason.trim()) return toast.error('Please enter a cancellation reason')
+              cancelMut.mutate(cancelReason)
+            }}
+            className="p-5 space-y-4"
+          >
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to cancel this order? This action will notify the customer and restore inventory if applicable.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="cancel-reason">Cancellation Reason *</Label>
+              <Input
+                id="cancel-reason"
+                required
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g. Customer requested cancellation via phone"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setCancelModal(false)}
+              >
+                Back
+              </Button>
+              <Button
+                type="submit"
+                variant="destructive"
+                className="flex-1"
+                disabled={cancelMut.isPending}
+              >
+                {cancelMut.isPending && <Spinner size="sm" className="mr-2" />}
+                Confirm Cancel
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Edit Special Instructions Modal */}
+      {editNoteModal && (
+        <Modal
+          open
+          onClose={() => setEditNoteModal(false)}
+          title={`Edit Instructions — Order #${order.orderNumber}`}
+          size="sm"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              editMut.mutate({ specialInstructions: specialNoteText })
+            }}
+            className="p-5 space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="special-instructions">Customer Special Instructions</Label>
+              <Input
+                id="special-instructions"
+                value={specialNoteText}
+                onChange={(e) => setSpecialNoteText(e.target.value)}
+                placeholder="e.g. Extra spicy, no onions, less oil"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setEditNoteModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                style={{
+                  backgroundColor: 'var(--gs-admin-accent)',
+                  color: 'var(--gs-admin-accent-foreground)',
+                }}
+                className="flex-1"
+                disabled={editMut.isPending}
+              >
+                {editMut.isPending && <Spinner size="sm" className="mr-2" />}
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Edit Items Modal — quantity correction, removal, and adding/swapping items */}
+      {editItemsModal && (
+        <Modal
+          open
+          onClose={() => setEditItemsModal(false)}
+          title={
+            showAddPicker
+              ? pickerSelected
+                ? pickerSelected.name
+                : 'Add an item'
+              : `Edit Items — Order #${order.orderNumber}`
+          }
+          size="sm"
+        >
+          {showAddPicker ? (
+            <div className="p-5 space-y-4">
+              <button
+                type="button"
+                onClick={() => (pickerSelected ? setPickerSelected(null) : setShowAddPicker(false))}
+                className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeftCircle size={14} aria-hidden="true" />
+                Back
+              </button>
+
+              {!pickerSelected ? (
+                <>
+                  <div className="relative">
+                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                    <Input
+                      value={pickerSearch}
+                      onChange={(e) => setPickerSearch(e.target.value)}
+                      placeholder="Search menu…"
+                      className="pl-9"
+                      autoFocus
+                    />
+                  </div>
+                  {pickerLoading ? (
+                    <div className="flex justify-center py-8"><Spinner size="md" /></div>
+                  ) : (
+                    <ul className="space-y-1.5 max-h-80 overflow-y-auto">
+                      {filteredPickerItems.map((item) => (
+                        <li key={item._id}>
+                          <button
+                            type="button"
+                            onClick={() => selectPickerItem(item)}
+                            className="w-full flex items-center justify-between gap-3 border border-border p-2.5 text-left hover:border-primary/50 hover:bg-primary/5 transition-colors gs-admin-focus-ring"
+                            style={{ borderRadius: 'var(--gs-admin-radius-lg)' }}
+                          >
+                            <span className="text-sm font-medium text-foreground truncate">{item.name}</span>
+                            <span className="text-xs font-mono text-muted-foreground shrink-0">
+                              Rs. {item.variants?.length ? item.variants[0].price : item.basePrice}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                      {filteredPickerItems.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-6">No items found.</p>
+                      )}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  {pickerSelected.variants?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-foreground mb-2">Choose an option</p>
+                      <div className="flex flex-col gap-1.5">
+                        {pickerSelected.variants.filter((v) => v.isAvailable).map((v) => (
+                          <label
+                            key={v._id}
+                            className="flex items-center justify-between gap-2 border border-border px-3 py-2 text-sm cursor-pointer"
+                            style={{ borderRadius: 'var(--gs-admin-radius-lg)' }}
+                          >
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="picker-variant"
+                                checked={pickerVariantId === v._id}
+                                onChange={() => setPickerVariantId(v._id)}
+                              />
+                              {v.name}
+                            </span>
+                            <span className="font-mono text-xs">Rs. {v.price}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {pickerSelected.addons?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-foreground mb-2">Add-ons</p>
+                      <div className="flex flex-col gap-1.5">
+                        {pickerSelected.addons.filter((a) => a.isAvailable).map((a) => (
+                          <label
+                            key={a._id}
+                            className="flex items-center justify-between gap-2 border border-border px-3 py-2 text-sm cursor-pointer"
+                            style={{ borderRadius: 'var(--gs-admin-radius-lg)' }}
+                          >
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={pickerAddonIds.includes(a._id)}
+                                onChange={() =>
+                                  setPickerAddonIds((prev) =>
+                                    prev.includes(a._id) ? prev.filter((x) => x !== a._id) : [...prev, a._id]
+                                  )
+                                }
+                              />
+                              {a.name}
+                            </span>
+                            <span className="font-mono text-xs">+Rs. {a.price}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-foreground">Quantity</span>
+                    <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                      onClick={() => setPickerQty((q) => Math.max(1, q - 1))}>−</Button>
+                    <span className="w-5 text-center text-sm font-semibold">{pickerQty}</span>
+                    <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                      onClick={() => setPickerQty((q) => Math.min(10, q + 1))}>+</Button>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={confirmAddPickedItem}
+                    style={{ backgroundColor: 'var(--gs-admin-accent)', color: 'var(--gs-admin-accent-foreground)' }}
+                    className="w-full"
+                  >
+                    Add to order
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (draftItems.length === 0 && pendingAddItems.length === 0) {
+                  return toast.error('An order must have at least one item — cancel the order instead')
+                }
+                const changedItems = draftItems
+                  .filter((d) => {
+                    const original = order.items.find((o) => o._id === d._id)
+                    return original && original.quantity !== d.quantity
+                  })
+                  .map((d) => ({ _id: d._id, quantity: d.quantity }))
+                const removeItemIds = order.items
+                  .filter((o) => !draftItems.some((d) => d._id === o._id))
+                  .map((o) => o._id)
+                const addItems = pendingAddItems.map((p) => ({
+                  menuItemId: p.menuItemId,
+                  quantity: p.quantity,
+                  variantId: p.variantId,
+                  addonIds: p.addonIds,
+                }))
+                if (changedItems.length === 0 && removeItemIds.length === 0 && addItems.length === 0) {
+                  setEditItemsModal(false)
+                  return
+                }
+                editItemsMut.mutate({ items: changedItems, removeItemIds, addItems })
+              }}
+              className="p-5 space-y-4"
+            >
+              <p className="text-sm text-muted-foreground">
+                Adjust quantities, remove items, or add a different dish — priced fresh off the current menu.
+              </p>
+              <ul className="space-y-3 max-h-72 overflow-y-auto">
+                {draftItems.map((item) => (
+                  <li
+                    key={item._id}
+                    className="flex items-center justify-between gap-3 border border-border p-3"
+                    style={{ borderRadius: 'var(--gs-admin-radius-lg)' }}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {item.name}
+                        {item.variant?.name && (
+                          <span className="text-muted-foreground font-normal"> ({item.variant.name})</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Rs. {item.unitPrice} each</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7 gs-admin-focus-ring"
+                        onClick={() =>
+                          setDraftItems((prev) =>
+                            prev.map((d) => (d._id === item._id ? { ...d, quantity: Math.max(1, d.quantity - 1) } : d))
+                          )
+                        }
+                        aria-label={`Decrease quantity of ${item.name}`}
+                      >
+                        −
+                      </Button>
+                      <span className="w-5 text-center text-sm font-semibold" aria-live="polite">
+                        {item.quantity}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7 gs-admin-focus-ring"
+                        onClick={() =>
+                          setDraftItems((prev) =>
+                            prev.map((d) => (d._id === item._id ? { ...d, quantity: Math.min(10, d.quantity + 1) } : d))
+                          )
+                        }
+                        aria-label={`Increase quantity of ${item.name}`}
+                      >
+                        +
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 gs-admin-focus-ring"
+                        onClick={() => setDraftItems((prev) => prev.filter((d) => d._id !== item._id))}
+                        aria-label={`Remove ${item.name} from order`}
+                      >
+                        <XCircle size={14} aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+
+                {pendingAddItems.map((item) => (
+                  <li
+                    key={item.tempId}
+                    className="flex items-center justify-between gap-3 border border-primary/40 bg-primary/5 p-3"
+                    style={{ borderRadius: 'var(--gs-admin-radius-lg)' }}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {item.name}
+                        {item.variantName && (
+                          <span className="text-muted-foreground font-normal"> ({item.variantName})</span>
+                        )}
+                        <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide text-primary">New</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Rs. {item.unitPrice} each{item.addonNames?.length ? ` + ${item.addonNames.join(', ')}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="w-5 text-center text-sm font-semibold">{item.quantity}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 gs-admin-focus-ring"
+                        onClick={() => setPendingAddItems((prev) => prev.filter((p) => p.tempId !== item.tempId))}
+                        aria-label={`Remove ${item.name} from order`}
+                      >
+                        <XCircle size={14} aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                type="button"
+                onClick={openAddPicker}
+                className="w-full flex items-center justify-center gap-1.5 border border-dashed border-border py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors gs-admin-focus-ring"
+                style={{ borderRadius: 'var(--gs-admin-radius-lg)' }}
+              >
+                <Plus size={14} aria-hidden="true" />
+                Add / swap an item
+              </button>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setEditItemsModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  style={{
+                    backgroundColor: 'var(--gs-admin-accent)',
+                    color: 'var(--gs-admin-accent-foreground)',
+                  }}
+                  className="flex-1"
+                  disabled={editItemsMut.isPending}
+                >
+                  {editItemsMut.isPending && <Spinner size="sm" className="mr-2" />}
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }

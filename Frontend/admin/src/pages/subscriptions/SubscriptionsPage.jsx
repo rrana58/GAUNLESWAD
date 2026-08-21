@@ -53,6 +53,7 @@ function MealPlanModal({ plan, onClose, onSave }) {
     items: plan?.items?.map((i) => i._id || i) || [],
   })
   const [loading, setLoading] = useState(false)
+  const [itemSearch, setItemSearch] = useState('')
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const { data: availableItems = [] } = useQuery({
@@ -68,6 +69,10 @@ function MealPlanModal({ plan, onClose, onSave }) {
         : [...f.items, id],
     }))
   }
+
+  const filteredItems = availableItems.filter((i) =>
+    !itemSearch || i.name.toLowerCase().includes(itemSearch.toLowerCase())
+  )
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -183,33 +188,48 @@ function MealPlanModal({ plan, onClose, onSave }) {
         </div>
 
         <fieldset className="border-0 p-0 m-0 space-y-2">
-          <legend>
-            <Label>Select Items ({form.items.length} selected — min 2) *</Label>
+          <legend className="w-full">
+            <div className="flex items-center justify-between mb-1">
+              <Label>Select Items ({form.items.length} selected — min 2) *</Label>
+            </div>
           </legend>
+          {availableItems.length > 5 && (
+            <Input
+              type="search"
+              placeholder="Search items..."
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              className="h-8 text-xs mb-2"
+            />
+          )}
           <div
             className="border border-border rounded-lg max-h-52 overflow-y-auto divide-y divide-border bg-card"
             style={{ borderRadius: 'var(--gs-admin-radius-lg)' }}
           >
-            {availableItems.map((item) => (
-              <label key={item._id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted transition-colors">
-                <input
-                  type="checkbox"
-                  checked={form.items.includes(item._id)}
-                  onChange={() => toggleItem(item._id)}
-                  className="rounded cursor-pointer"
-                />
-                {item.image?.url && (
-                  <img
-                    src={item.image.url}
-                    alt=""
-                    className="w-7 h-7 object-cover"
-                    style={{ borderRadius: 'var(--gs-admin-radius-md)' }}
+            {filteredItems.length === 0 ? (
+              <div className="p-4 text-xs text-center text-muted-foreground">No items match your search.</div>
+            ) : (
+              filteredItems.map((item) => (
+                <label key={item._id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={form.items.includes(item._id)}
+                    onChange={() => toggleItem(item._id)}
+                    className="rounded cursor-pointer"
                   />
-                )}
-                <span className="text-sm text-foreground flex-1">{item.name}</span>
-                <span className="text-xs text-muted-foreground/60">Rs. {item.basePrice}</span>
-              </label>
-            ))}
+                  {item.image?.url && (
+                    <img
+                      src={item.image.url}
+                      alt=""
+                      className="w-7 h-7 object-cover"
+                      style={{ borderRadius: 'var(--gs-admin-radius-md)' }}
+                    />
+                  )}
+                  <span className="text-sm text-foreground flex-1">{item.name}</span>
+                  <span className="text-xs text-muted-foreground/60">Rs. {item.basePrice}</span>
+                </label>
+              ))
+            )}
           </div>
         </fieldset>
 

@@ -1,20 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { colors, spacing, typography, shadows, radius, motion, breakpoints } from './index.js'
 
-/**
- * Gharko Swaad — React Theme Context
- *
- * Provides JS-level access to design tokens for components that need
- * runtime theming (e.g., conditional status colors, dynamic charts, canvas renders).
- *
- * The CSS variables in provider.css handle the actual visual rendering.
- * This context provides the same token values programmatically to React code.
- *
- * Usage:
- *   import { useTheme } from '@shared/theme/ThemeProvider'
- *   const { colors } = useTheme()
- *   style={{ color: colors.status.delivered }}
- */
+
 const ThemeContext = createContext(null)
 
 export function ThemeProvider({ children, app = 'customer' }) {

@@ -1,6 +1,3 @@
-/**
- * Gharko Swaad Design Tokens Central Export
- */
 
 import { colors } from './colors.js';
 import { spacing } from './spacing.js';

@@ -7,25 +7,7 @@ import { buildLoginPayload, parseLoginResponse } from './loginResponse.js';
 import { saveAuthSession, getStoredUser } from './session.js';
 import { getRoleRedirectUrl } from './roleRedirect.js';
 
-/**
- * Reusable Unified Login Page Component for all Gharko Swaad user roles.
- *
- * Design System: Phase 4.1 — Auth Migration
- * Hardcoded hex values replaced with --gs-* CSS custom property tokens
- * from @shared/theme/provider.css injected at :root.
- *
- * Token mappings:
- *   --gs-primary          Forest Green  #1B3A25
- *   --gs-secondary        Faded Copper  #B58A63
- *   --gs-bg               Warm Ivory    #FAF8F5
- *   --gs-text-main                      #1F2937
- *   --gs-border                         #E5E7EB
- *
- * The warm-parchment brand aesthetic is preserved; only hardcoded
- * hex literals are replaced with CSS variables.
- */
 
-/* ── Inline token map scoped to login page ── */
 const T = {
   // Page & card shell
   pageBg:        'var(--gs-auth-page-bg,    #1F2E1A)',   // Deep forest night

@@ -11,38 +11,7 @@ import PlanCard from '@/components/subscriptions/PlanCard'
 import SubscriptionStatusCard from '@/components/subscriptions/SubscriptionStatusCard'
 import { useItemModalStore } from '@/store/itemModalStore'
 
-/**
- * Subscriptions — Design System: Phase 4.7 Profile & Remaining Migration
- *
- * Token changes:
- *  - Confirmation screen plan card: rounded-lg → var(--gs-radius-lg)
- *  - Payment method labels: rounded-lg → var(--gs-radius-lg)
- *  - Confirm subscription button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Guest login prompt: rounded-lg → var(--gs-radius-lg)
- *  - Loading state: plain "Loading..." → gs-skeleton
- *  - Cancel request button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Meal item cards: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Login link: gs-focus-ring
- *
- * Accessibility:
- *  - Confirmation <main>: landmark
- *  - Plan summary: aria-labelledby
- *  - Payment method group: role="radiogroup" + aria-labelledby
- *  - Each method: radio aria-label
- *  - Confirm button: aria-busy + gs-focus-ring
- *  - Main page: <main> landmark
- *  - Guest banner: role="status"
- *  - Loading: gs-skeleton + role="status"
- *  - My subscription section: aria-labelledby
- *  - Meals grid: role="list" + aria-label
- *  - Each meal card: role="listitem" + aria-label
- *  - Meal image: alt text
- *  - Cancel button: gs-focus-ring + aria-label
- *  - Usages list: role="list"
- *  - Plans section: aria-labelledby
- *
- * handleSubscribe, handleCancel, queries, openModal unchanged.
- */
+
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash (in person)', enabled: true },
   { id: 'bank_transfer', label: 'Bank transfer', enabled: true },

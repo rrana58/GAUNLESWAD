@@ -1,8 +1,3 @@
-/**
- * Gharko Swaad Design System — Color Tokens
- * Single source of truth for color definitions across Customer, Admin, Kitchen, and Rider apps.
- */
-
 export const colors = {
   // Brand Colors
   primary: '#1B3A25',        // Forest Green (20% share)

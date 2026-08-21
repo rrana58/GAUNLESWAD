@@ -49,10 +49,16 @@ export default function TasksBoard() {
       const orderId = order._id;
       const status = order.status;
       setOrders((prev) => {
-        // If order just became ready, add it to list
         if (status === "ready" && !prev.some(o => o._id === orderId)) {
            fetchOrders();
-           return prev; 
+           if (window.__riderSoundEnabled !== false) {
+             playNotificationSound();
+           }
+           toast("🔔 Order ready for pickup!", {
+             description: `Order #${order.orderNumber || ""} is ready.`,
+             duration: 8000,
+           });
+           return prev;
         }
         
         if (status === "delivered" || status === "cancelled") {

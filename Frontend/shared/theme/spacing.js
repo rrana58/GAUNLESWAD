@@ -1,7 +1,3 @@
-/**
- * Gharko Swaad Design System — Spacing Tokens
- * Based on an 8px grid system with 4px micro steps.
- */
 
 export const spacing = {
   space0: '0px',

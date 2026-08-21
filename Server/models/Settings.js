@@ -25,6 +25,28 @@ const settingsSchema = new mongoose.Schema(
       default: 500,
       min: 0,
     },
+    // ─── Delivery zones — restrict how far orders can be placed from, and
+    // charge a distance-appropriate fee. Optional: if kitchenLocation isn't
+    // set, the app falls back to the flat DELIVERY_FEE constant with no
+    // range restriction (so this is safe to leave unconfigured).
+    kitchenLocation: {
+      lat: { type: Number, min: -90, max: 90 },
+      lng: { type: Number, min: -180, max: 180 },
+    },
+    // Hard cutoff — orders from further than this are rejected outright.
+    maxDeliveryDistanceKm: {
+      type: Number,
+      min: 0,
+    },
+    // Tiered fees by distance. Sorted ascending by upToKm; the first tier
+    // whose upToKm >= the customer's distance applies. e.g.
+    // [{upToKm:3, fee:30}, {upToKm:7, fee:50}, {upToKm:12, fee:80}]
+    deliveryZones: [
+      {
+        upToKm: { type: Number, required: true, min: 0 },
+        fee: { type: Number, required: true, min: 0 },
+      },
+    ],
     // Maintenance mode — blocks all orders
     maintenanceMode: {
       type: Boolean,

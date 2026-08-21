@@ -1,27 +1,7 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/**
- * StatusTimeline — Design System: Phase 4.6 Orders Migration
- *
- * Token changes:
- *  - Step dot: h-6 w-6 rounded-full → h-6 w-6 + var(--gs-radius-full)
- *  - Connector line: bg-accent / bg-border retained ✅ (semantic tokens)
- *  - Cancelled/refunded card: rounded-lg → var(--gs-radius-lg)
- *
- * Accessibility:
- *  - Container: role="list" + aria-label describing overall status
- *  - Each step: role="listitem"
- *  - Current step: aria-current="step"
- *  - Done vs pending: aria-label on each step dot div
- *  - Check icon: aria-hidden="true"
- *  - Inner dot: aria-hidden="true"
- *  - Step label: moved to visible text — no aria-label needed there
- *  - Connector line: aria-hidden="true"
- *  - Cancelled/refunded: role="status" for SR announcement
- *
- * Props (status) unchanged.
- */
+
 const STEPS = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered']
 const LABELS = {
   pending: 'Order placed',

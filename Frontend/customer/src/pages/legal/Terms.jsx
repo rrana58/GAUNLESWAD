@@ -9,20 +9,20 @@ export default function Terms() {
       <main className="flex-1 px-5 py-6 max-w-3xl mx-auto space-y-6 text-foreground" aria-label="Terms and Conditions">
         <div className="border-b border-border pb-4">
           <h1 className="font-display text-2xl font-bold text-primary">Terms & Conditions</h1>
-          <p className="text-xs text-muted-foreground mt-1">Last updated: August 2026 — Gharko Swad Cloud Kitchen (Pokhara, Nepal)</p>
+          <p className="text-xs text-muted-foreground mt-1">Last updated: August 2026 — Gaunle Swad (Pokhara, Nepal)</p>
         </div>
 
         <section className="space-y-2">
           <h2 className="font-display text-base font-semibold text-foreground">1. Introduction & Acceptance</h2>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Welcome to Gharko Swad ("we", "our", "us"). By accessing or using our mobile web application, ordering platform, or cloud kitchen services in Pokhara, Nepal, you agree to be bound by these Terms and Conditions. If you do not agree, please do not use our services.
+            Welcome to Gaunle Swad ("we", "our", "us"). By accessing or using our mobile web application, ordering platform, or cloud kitchen services in Pokhara, Nepal, you agree to be bound by these Terms and Conditions. If you do not agree, please do not use our services.
           </p>
         </section>
 
         <section className="space-y-2">
           <h2 className="font-display text-base font-semibold text-foreground">2. Services Offered</h2>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Gharko Swad operates a tech-enabled cloud kitchen providing home-style Nepali meals, authentic thalis, daily meal subscriptions, celebration packages, and food delivery services within specified service zones in Pokhara, Nepal.
+            Gaunle Swad operates a tech-enabled cloud kitchen providing home-style Nepali meals, authentic thalis, daily meal subscriptions, celebration packages, and food delivery services within specified service zones in Pokhara, Nepal.
           </p>
         </section>
 

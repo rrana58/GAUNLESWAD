@@ -1,0 +1,6 @@
+
+module.exports = {
+  DELIVERY_FEE: 50,
+  MAX_ITEMS_PER_ORDER: 20,
+  MAX_QUANTITY_PER_ITEM: 10,
+};

@@ -1,25 +1,6 @@
 import { MapPin, Home, Briefcase, Star, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/**
- * AddressCard — Design System: Phase 4.5 Checkout Migration
- *
- * Token changes:
- *  - Card: rounded-lg → var(--gs-radius-lg); added var(--gs-shadow-sm) on selected state
- *  - Avatar icon circle: rounded-full → var(--gs-radius-full)
- *  - Edit/Delete buttons: added gs-focus-ring + 44px touch target
- *
- * Accessibility:
- *  - CRITICAL: selectable card changed from div+onClick → button element (WCAG 4.1.2)
- *  - Non-selectable card: div retained (no interaction)
- *  - Selectable card: aria-pressed for selected state; aria-label with address label
- *  - Edit button: aria-label retained + gs-focus-ring + 44px target
- *  - Delete button: aria-label retained + gs-focus-ring + 44px target
- *  - Default star icon: aria-hidden="true"
- *  - Label icon: aria-hidden="true"
- *
- * No business logic, onSelect, onEdit, onDelete, or prop interface changed.
- */
 const LABEL_ICONS = { Home, Work: Briefcase, Other: MapPin }
 
 export default function AddressCard({

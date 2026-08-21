@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, sendBroadcast } from '@/api/admin'
+import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/admin'
 import { toast } from 'sonner'
 import { Plus, Trash2, Megaphone, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -35,7 +35,7 @@ import EmptyState from '@/components/ui/EmptyState'
  */
 
 function AnnouncementModal({ onClose, onSave }) {
-  const [form, setForm] = useState({ title: '', body: '', expiresAt: '', sendPush: false })
+  const [form, setForm] = useState({ title: '', body: '', expiresAt: '' })
   const [loading, setLoading] = useState(false)
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -46,10 +46,6 @@ function AnnouncementModal({ onClose, onSave }) {
     setLoading(true)
     try {
       await onSave({ ...form, expiresAt: form.expiresAt || undefined })
-      if (form.sendPush) {
-        await sendBroadcast({ title: form.title, body: form.body }).catch(() => toast.error('Failed to send push broadcast'))
-        toast.success('Push notification broadcast sent!')
-      }
       onClose()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save')
@@ -109,16 +105,9 @@ function AnnouncementModal({ onClose, onSave }) {
           />
           <p className="text-xs text-muted-foreground/60">Leave blank to keep it up until you remove it manually.</p>
         </div>
-        <div className="flex items-center gap-2 pt-2">
-          <input
-            type="checkbox"
-            id="ann-push"
-            checked={form.sendPush}
-            onChange={(e) => set('sendPush', e.target.checked)}
-            className="rounded cursor-pointer w-4 h-4"
-          />
-          <Label htmlFor="ann-push" className="cursor-pointer">Also send as a Push Notification broadcast to all users</Label>
-        </div>
+        <p className="text-xs text-muted-foreground bg-muted px-3 py-2 rounded-lg">
+          Every customer gets notified automatically (in-app + push if they have the app) as soon as you post this.
+        </p>
         <div className="flex gap-3 pt-2">
           <Button type="button" variant="outline" className="flex-1 gs-admin-focus-ring" onClick={onClose}>Cancel</Button>
           <Button

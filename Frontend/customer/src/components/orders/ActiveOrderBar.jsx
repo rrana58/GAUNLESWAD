@@ -5,19 +5,7 @@ import { useActiveOrderStore } from '@/store/activeOrderStore'
 import { useAuthStore } from '@/store/authStore'
 import { connectSocket } from '@/lib/socket'
 
-/**
- * ActiveOrderBar — Design System: Phase 4.2 Customer Home Migration
- *
- * Changes:
- *  - Added gs-focus-ring to Link for keyboard navigation
- *  - z-index references --gs-z-sticky token
- *  - All existing Tailwind semantic tokens retained (bg-primary/5, text-primary,
- *    border-border, text-foreground, text-muted-foreground) — correct ✅
- *  - Ping dot colors use Tailwind text-primary — correct ✅
- *  - aria-label added to Link for screen readers
- *
- * No socket, polling, business, or order-tracking logic changed.
- */
+
 const isMongoId = (v) => /^[0-9a-f]{24}$/.test(v)
 const TERMINAL = ['delivered', 'cancelled', 'refunded']
 const LABELS = {

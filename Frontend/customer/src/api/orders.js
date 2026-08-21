@@ -60,4 +60,5 @@ export const jobApi = {
 
 export const promoApi = {
   getPublic: () => api.get('/coupons/public'),
+  validate: (code, subtotal) => api.post('/coupons/validate', { code, subtotal }),
 }

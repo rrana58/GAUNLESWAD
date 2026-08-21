@@ -2,9 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import api from '@/api/axios'
 
-// Line item shape: { menuItemId, name, price, image, quantity, variantId?, variantName?, addonIds?, addonNames?, specialInstructions? }
-// A "line key" (menuItemId + variantId + sorted addonIds) distinguishes otherwise-identical
-// items customized differently, so they don't merge in the cart.
+
 function lineKey(item) {
   return [item.menuItemId, item.variantId || '', ...(item.addonIds || []).slice().sort()].join('|')
 }
@@ -58,8 +56,7 @@ export const useCartStore = create(
         syncCartWithServer([]);
       },
 
-      // Plain methods, not getters — zustand's set() spreads state, which
-      // would otherwise flatten a getter into a stale snapshot value.
+      
       getSubtotal: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
       getItemCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
     }),

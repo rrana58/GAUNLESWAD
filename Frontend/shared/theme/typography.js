@@ -1,6 +1,3 @@
-/**
- * Gharko Swaad Design System — Typography Tokens
- */
 
 export const typography = {
   fontFamily: {

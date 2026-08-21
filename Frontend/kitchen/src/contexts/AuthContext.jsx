@@ -11,7 +11,7 @@ const AuthContext = createContext();
 const authService = createAuthService(api);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(getStoredUser());
+  const [user, setUser] = useState(getStoredUser("kitchen"));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem("user", JSON.stringify(res.data.user));
           }
         } catch {
-          clearAuthSession();
+          clearAuthSession("kitchen");
           setUser(null);
         }
       } else {
@@ -37,12 +37,12 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const loginWithSession = (userData, accessToken, refreshToken) => {
-    saveAuthSession(userData, accessToken, refreshToken);
+    saveAuthSession(userData, accessToken, refreshToken, "kitchen");
     setUser(userData);
   };
 
   const logout = () => {
-    clearAuthSession();
+    clearAuthSession("kitchen");
     setUser(null);
   };
 

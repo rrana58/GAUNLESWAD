@@ -1,19 +1,37 @@
-/**
- * Single-flight refresh: concurrent 401s share one /auth/refresh call.
- * Uses fetch (not axios) so this module has no node_modules dependency.
- */
+
 export function attachSingleFlightRefresh(api, {
   apiUrl,
   getRefreshToken,
   setTokens,
   onRefreshFailed,
   loginPath,
+  storageKey,
 }) {
   let refreshPromise = null
+
+  function readPersistedTokens() {
+    if (!storageKey) return null
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      return parsed?.state || null
+    } catch {
+      return null
+    }
+  }
 
   function refreshAccessToken() {
     if (!refreshPromise) {
       const refreshToken = getRefreshToken()
+
+      
+      const persistedBefore = readPersistedTokens()
+      if (persistedBefore?.refreshToken && persistedBefore.refreshToken !== refreshToken && persistedBefore.accessToken) {
+        setTokens({ accessToken: persistedBefore.accessToken, refreshToken: persistedBefore.refreshToken, user: persistedBefore.user })
+        return Promise.resolve(persistedBefore.accessToken)
+      }
+
       if (!refreshToken) return Promise.reject(new Error('No refresh token'))
 
       refreshPromise = fetch(`${apiUrl}/auth/refresh`, {
@@ -32,6 +50,12 @@ export function attachSingleFlightRefresh(api, {
           return data.accessToken
         })
         .catch((err) => {
+          
+          const persistedAfter = readPersistedTokens()
+          if (persistedAfter?.refreshToken && persistedAfter.refreshToken !== refreshToken && persistedAfter.accessToken) {
+            setTokens({ accessToken: persistedAfter.accessToken, refreshToken: persistedAfter.refreshToken, user: persistedAfter.user })
+            return persistedAfter.accessToken
+          }
           onRefreshFailed?.()
           throw err
         })

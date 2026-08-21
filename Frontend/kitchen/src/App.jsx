@@ -6,13 +6,18 @@ import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
 import OrdersBoard from "./pages/OrdersBoard";
 
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-background" role="status" aria-label="Loading kitchen application">
+        <div
+          className="animate-spin rounded-full h-12 w-12 border-b-2"
+          style={{ borderBottomColor: "var(--gs-kitchen-accent)" }}
+        />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }
@@ -65,4 +70,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-

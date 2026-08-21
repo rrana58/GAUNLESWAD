@@ -8,35 +8,7 @@ import { useCartStore, lineKey } from '@/store/cartStore'
 import { formatNpr } from '@/lib/utils'
 import PageHeader from '@/components/layout/PageHeader'
 
-/**
- * Cart — Design System: Phase 4.4 Cart & Order Summary Migration
- *
- * Token changes:
- *  - Cart item card:     rounded-lg → var(--gs-radius-lg); added var(--gs-shadow-sm)
- *  - Thumbnail:          rounded-md → var(--gs-radius-md)
- *  - Stepper wrapper:    rounded-md → var(--gs-radius-md)
- *  - Stepper buttons:    h-6 w-6 (24px) → h-11 w-11 (44px) WCAG touch target
- *  - Remove button:      plain button → 44px touch target + gs-focus-ring
- *  - Browse Menu link:   rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Checkout button:    rounded-lg → var(--gs-radius-lg) + gs-focus-ring + active:scale
- *  - Summary section:    added var(--gs-shadow-sm) + var(--gs-radius-lg) card wrapper
- *  - Subscription badge: styled with --gs-secondary token
- *
- * Accessibility:
- *  - Cart list:         role="list" + aria-label on container
- *  - Cart items:        role="listitem" on each row
- *  - Stepper wrapper:   role="group" aria-label per item
- *  - Quantity count:    aria-live="polite" aria-atomic + aria-label
- *  - Remove button:     aria-label retained + gs-focus-ring + 44px target
- *  - Item price:        aria-label with currency context
- *  - Price summary:     role="region" aria-label="Order summary"
- *  - Checkout button:   descriptive aria-label with total
- *  - Empty state icon:  aria-hidden="true"
- *  - Subscription row:  role="status" for screen reader announcement
- *  - Stepper buttons:   gs-focus-ring + aria-label retained
- *
- * No business logic, pricing, cart store, API, or routing changed.
- */
+
 export default function Cart() {
   const navigate = useNavigate()
   const items = useCartStore((s) => s.items)

@@ -27,7 +27,7 @@ async function main() {
   await clearAuthRateLimits();
 
   const phone = "9899999999";
-  let user = await User.findOne({ phone }).select("+refreshTokenHash");
+  let user = await User.findOne({ phone }).select("+refreshTokens");
   if (!user) {
     user = await User.create({
       phone,
@@ -42,7 +42,7 @@ async function main() {
   const refreshToken = signRefreshToken(user._id);
   await User.updateOne(
     { _id: user._id },
-    { $set: { refreshTokenHash: hashRefreshToken(refreshToken), isActive: true } }
+    { $set: { refreshTokens: [{ hash: hashRefreshToken(refreshToken) }], isActive: true } }
   );
 
   console.log("Firing 10 concurrent refresh requests with the same token...\n");

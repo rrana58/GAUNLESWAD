@@ -1,19 +1,6 @@
 import { cn } from '@/lib/utils'
 
-/**
- * CategoryChips — Design System: Phase 4.2 Customer Home Migration
- *
- * Changes:
- *  - All Tailwind semantic tokens retained (bg-secondary, bg-card, border-border,
- *    text-muted-foreground, etc.) — these correctly reference the customer app's
- *    @theme inline tokens which map to --gs-* values
- *  - Added gs-focus-ring to every chip button for WCAG AA keyboard navigation
- *  - Added aria-pressed to indicate active state to screen readers
- *  - Added aria-label to "All" button
- *  - Decorative category images get alt="" (already had cat.name which is fine)
- *
- * No behavior, layout, or API logic changed.
- */
+
 export default function CategoryChips({ categories, activeId, onSelect }) {
   return (
     <div className="py-4 bg-muted/30" role="group" aria-label="Filter by category">

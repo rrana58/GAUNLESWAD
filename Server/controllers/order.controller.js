@@ -26,10 +26,48 @@ const {
   scheduleReferralReward,
 } = require("../jobs/queues");
 
-const DELIVERY_FEE = 50;
+const DELIVERY_FEE = require("../config/constants").DELIVERY_FEE;
 const FREE_DELIVERY_ABOVE = 500;
-const MAX_ITEMS_PER_ORDER = 20;
-const MAX_QUANTITY_PER_ITEM = 10;
+const MAX_ITEMS_PER_ORDER = require("../config/constants").MAX_ITEMS_PER_ORDER;
+const MAX_QUANTITY_PER_ITEM = require("../config/constants").MAX_QUANTITY_PER_ITEM;
+const { distanceKm } = require("../utils/geo");
+
+// ─── Distance-based delivery fee ──────────────────────────────────────────────
+// If admin hasn't configured a kitchen location, this falls back to the flat
+// DELIVERY_FEE with no range restriction — safe to leave unconfigured.
+// Once a kitchen location IS set, delivery orders must include coordinates
+// (nudges customers toward the GPS/map-pin address flow) so distance and
+// range can actually be checked.
+function resolveDeliveryFee(settings, deliveryAddress) {
+  const kitchen = settings.kitchenLocation;
+  if (!kitchen?.lat || !kitchen?.lng) {
+    return { fee: DELIVERY_FEE, distanceKm: null };
+  }
+
+  const coords = deliveryAddress?.coordinates;
+  const lat = Number(coords?.lat), lng = Number(coords?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new AppError(
+      "Please share your delivery location (GPS/map pin) so we can calculate the delivery fee and confirm we deliver to you.",
+      400
+    );
+  }
+
+  const distance = distanceKm(kitchen.lat, kitchen.lng, lat, lng);
+
+  if (settings.maxDeliveryDistanceKm && distance > settings.maxDeliveryDistanceKm) {
+    throw new AppError(
+      `Sorry, that address is about ${distance.toFixed(1)} km away — we currently only deliver up to ${settings.maxDeliveryDistanceKm} km. Try pickup instead?`,
+      400
+    );
+  }
+
+  const zones = settings.deliveryZones || [];
+  const matchedZone = zones.find((z) => distance <= z.upToKm);
+  const fee = matchedZone ? matchedZone.fee : (zones.length > 0 ? zones[zones.length - 1].fee : DELIVERY_FEE);
+
+  return { fee, distanceKm: Math.round(distance * 10) / 10 };
+}
 
 async function fetchActiveSpecialSession() {
   const { hour } = getNepaliComponents();
@@ -53,7 +91,7 @@ async function fetchActiveSpecialSession() {
 }
 
 // ─── Price calculation (pure — no side effects) ───────────────────────────────
-const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, dbSession) => {
+const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, dbSession, deliveryType, deliveryAddress) => {
   if (cartItems.length > MAX_ITEMS_PER_ORDER)
     throw new AppError(`Maximum ${MAX_ITEMS_PER_ORDER} items per order.`, 400);
 
@@ -221,10 +259,21 @@ const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, db
   const deliveryThreshold = settings.freeDeliveryAbove !== undefined 
     ? settings.freeDeliveryAbove 
     : FREE_DELIVERY_ABOVE;
-    
-  // Allow free delivery if they hit the threshold OR if they are claiming a subscription meal
-  let deliveryFee = subtotal >= deliveryThreshold ? 0 : DELIVERY_FEE;
-  
+
+  let deliveryFee = 0;
+  let deliveryDistanceKm = null;
+  if (deliveryType !== "pickup") {
+    const resolved = resolveDeliveryFee(settings, deliveryAddress);
+    deliveryFee = resolved.fee;
+    deliveryDistanceKm = resolved.distanceKm;
+  }
+
+  // Free delivery once subtotal hits the threshold, overriding the zone fee.
+  if (subtotal >= deliveryThreshold) {
+    deliveryFee = 0;
+  }
+
+  // Allow free delivery if they are claiming a subscription meal
   if (mealClaimsMeta.length > 0) {
     deliveryFee = 0;
   }
@@ -284,7 +333,7 @@ const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, db
   const totalAmount = Math.round(Math.max(0, subtotal + deliveryFee - couponDiscount - walletDiscount) * 100) / 100;
   const taxAmount = Math.round((subtotal - (subtotal / 1.13)) * 100) / 100;
 
-  return { orderItems, subtotal, taxAmount, deliveryFee, couponDiscount, walletDiscount, totalAmount, appliedCoupon, mealClaimsMeta, activeSession };
+  return { orderItems, subtotal, taxAmount, deliveryFee, deliveryDistanceKm, couponDiscount, walletDiscount, totalAmount, appliedCoupon, mealClaimsMeta, activeSession };
 };
 
 // ─── Place Order (wrapped in MongoDB transaction) ─────────────────────────────
@@ -326,8 +375,8 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
     await dbSession.withTransaction(async () => {
       // Meal-plan claims happen outside the transaction (they have their own
       // atomic MongoDB update). Track them so we can roll back if needed.
-      const calcResult = await calculateOrderTotals(items, couponCode, userId, useWallet, dbSession);
-      const { orderItems, subtotal, taxAmount, deliveryFee, couponDiscount, walletDiscount, totalAmount,
+      const calcResult = await calculateOrderTotals(items, couponCode, userId, useWallet, dbSession, deliveryType, deliveryAddress);
+      const { orderItems, subtotal, taxAmount, deliveryFee, deliveryDistanceKm, couponDiscount, walletDiscount, totalAmount,
         appliedCoupon, activeSession } = calcResult;
       
       // Store reference to outer block variable
@@ -368,7 +417,7 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
       }
 
       const orderData = {
-        items: orderItems, subtotal, taxAmount, deliveryFee,
+        items: orderItems, subtotal, taxAmount, deliveryFee, deliveryDistanceKm,
         couponCode: appliedCoupon?.code, couponDiscount, walletDiscount, totalAmount,
         deliveryAddress: resolvedAddress, deliveryType: deliveryType || "delivery",
         paymentMethod, specialInstructions: specialInstructions?.slice(0, 500), scheduledFor,
@@ -508,11 +557,13 @@ exports.cancelOrder = catchAsync(async (req, res, next) => {
   const order = await Order.findById(req.params.id);
   if (!order) throw new AppError("Order not found.", 404);
   const isOwner = order.customer?.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== "admin") throw new AppError("Access denied.", 403);
-  if (!["pending", "confirmed"].includes(order.status))
+  const isStaff = ["admin", "kitchen"].includes(req.user.role);
+  if (!isOwner && !isStaff) throw new AppError("Access denied.", 403);
+  if (!["pending", "confirmed", "preparing"].includes(order.status) && !isStaff)
     throw new AppError(`Cannot cancel an order that is "${order.status}".`, 400);
+
   order.status = "cancelled";
-  order.cancelReason = req.body.reason?.slice(0, 500) || "Cancelled by customer";
+  order.cancelReason = req.body.reason?.slice(0, 500) || `Cancelled by ${req.user.role || "customer"}`;
   await order.save();
 
   // Restore stock for items with inventory tracking
@@ -528,6 +579,165 @@ exports.cancelOrder = catchAsync(async (req, res, next) => {
 
   emitOrderUpdate(order);
   sendSuccess(res, { order }, "Order cancelled");
+});
+
+// ─── Price a single item being added to an order during an edit ──────────────
+// Deliberately does NOT touch subscription/meal-claim logic (claimMealsAtomic
+// mutates subscription usage — an admin/kitchen correction after the fact
+// must never silently consume a customer's plan meal). Applies the same
+// global/session discounts a customer would see on the live menu.
+const priceEditedOrderItem = async (cartItem, settings, activeSession, sessionItemIds) => {
+  const menuItem = await MenuItem.findOne({ _id: cartItem.menuItemId, isAvailable: true });
+  if (!menuItem) throw new AppError("Selected item is unavailable or invalid.", 400);
+
+  if (!Number.isInteger(cartItem.quantity) || cartItem.quantity < 1 || cartItem.quantity > MAX_QUANTITY_PER_ITEM)
+    throw new AppError(`Quantity must be between 1 and ${MAX_QUANTITY_PER_ITEM}.`, 400);
+
+  if (menuItem.stockQuantity !== null && menuItem.stockQuantity !== undefined && menuItem.stockQuantity < cartItem.quantity) {
+    throw new AppError(`Sorry, only ${menuItem.stockQuantity} portion(s) of "${menuItem.name}" are available.`, 400);
+  }
+
+  let unitPrice = menuItem.basePrice;
+  let selectedVariant = null;
+  if (cartItem.variantId) {
+    selectedVariant = menuItem.variants.id(cartItem.variantId);
+    if (!selectedVariant?.isAvailable) throw new AppError(`Variant not available for ${menuItem.name}.`, 400);
+    unitPrice = selectedVariant.price;
+  }
+
+  let addonTotal = 0;
+  const selectedAddons = [];
+  if (cartItem.addonIds?.length) {
+    if (cartItem.addonIds.length > 5) throw new AppError("Maximum 5 addons per item.", 400);
+    for (const addonId of cartItem.addonIds) {
+      const addon = menuItem.addons.id(addonId);
+      if (addon?.isAvailable) {
+        addonTotal += addon.price;
+        selectedAddons.push({ name: addon.name, price: addon.price });
+      }
+    }
+  }
+
+  let globalDiscount = { applied: false, percent: 0, savedAmount: 0 };
+  if (settings.globalDiscountPercent > 0) {
+    const multiplier = 1 - settings.globalDiscountPercent / 100;
+    const original = unitPrice;
+    unitPrice = Math.round(original * multiplier);
+    globalDiscount = {
+      applied: true, percent: settings.globalDiscountPercent,
+      label: settings.globalDiscountLabel, savedAmount: original - unitPrice,
+    };
+  }
+
+  let sessionDiscount = { applied: false, percent: 0, savedAmount: 0 };
+  if (activeSession && sessionItemIds.has(menuItem._id.toString())) {
+    const multiplier = 1 - activeSession.discountPercent / 100;
+    const original = unitPrice;
+    unitPrice = Math.round(original * multiplier);
+    sessionDiscount = {
+      applied: true, sessionType: activeSession.type, sessionName: activeSession.displayName,
+      percent: activeSession.discountPercent, savedAmount: original - unitPrice,
+    };
+  }
+
+  const itemTotal = (unitPrice + addonTotal) * cartItem.quantity;
+  if (!Number.isFinite(itemTotal) || itemTotal < 0) throw new AppError("Invalid item price calculation.", 400);
+
+  return {
+    menuItem: menuItem._id, name: menuItem.name, image: menuItem.image?.url,
+    quantity: cartItem.quantity, unitPrice,
+    variant: selectedVariant ? { name: selectedVariant.name, price: selectedVariant.price } : undefined,
+    addons: selectedAddons, specialInstructions: cartItem.specialInstructions?.slice(0, 200),
+    globalDiscount, sessionDiscount, planMeal: { applied: false },
+    totalPrice: Math.round(itemTotal * 100) / 100,
+  };
+};
+
+// ─── Edit Order (Admin & Kitchen Staff) ───────────────────────────────────────
+// `items` refers to EXISTING order line items being corrected — each entry
+// is { _id: <order item subdocument id>, quantity: <new quantity> }. This is
+// deliberately NOT the "place order" cart shape ({menuItemId, variantId, ...})
+// since a placed order's item only stores a name/price snapshot of the variant
+// and addons it was ordered with, not their live menu IDs — there is nothing
+// to re-look-up against the menu for an existing item.
+//
+// `addItems` is for genuinely changing what's in the order — swapping a dish,
+// adding a new one, or picking a different variant. Each entry is a fresh
+// cart-shape pick: { menuItemId, quantity, variantId?, addonIds?,
+// specialInstructions? }, priced fresh off the live menu via
+// priceEditedOrderItem. To "change" an existing item, the client removes the
+// old line (removeItemIds) and adds the new selection (addItems) in the same
+// request.
+exports.editOrder = catchAsync(async (req, res, next) => {
+  const { items, removeItemIds, addItems, specialInstructions, adminNote } = req.body;
+  const order = await Order.findById(req.params.id);
+  if (!order) throw new AppError("Order not found.", 404);
+
+  if (["delivered", "cancelled", "refunded"].includes(order.status)) {
+    throw new AppError(`Cannot edit order that is already ${order.status}.`, 400);
+  }
+
+  if (specialInstructions !== undefined) {
+    order.specialInstructions = specialInstructions.slice(0, 500);
+  }
+  if (adminNote !== undefined) {
+    order.adminNote = adminNote.slice(0, 500);
+  }
+
+  // ── Quantity corrections on existing line items ──────────────────────────
+  if (items && Array.isArray(items) && items.length > 0) {
+    for (const entry of items) {
+      if (!entry?._id) continue;
+      const orderItem = order.items.id(entry._id);
+      if (!orderItem) throw new AppError("One or more items no longer exist on this order.", 400);
+
+      const newQty = Number(entry.quantity);
+      if (!Number.isInteger(newQty) || newQty < 1 || newQty > MAX_QUANTITY_PER_ITEM) {
+        throw new AppError(`Quantity must be between 1 and ${MAX_QUANTITY_PER_ITEM}.`, 400);
+      }
+      const addonsTotal = (orderItem.addons || []).reduce((s, a) => s + (a.price || 0), 0);
+      orderItem.quantity = newQty;
+      orderItem.totalPrice = Math.round((orderItem.unitPrice + addonsTotal) * newQty * 100) / 100;
+    }
+  }
+
+  // ── Remove line items entirely ────────────────────────────────────────────
+  if (removeItemIds && Array.isArray(removeItemIds) && removeItemIds.length > 0) {
+    order.items = order.items.filter((it) => !removeItemIds.includes(it._id.toString()));
+  }
+
+  // ── Add / swap-in items priced fresh off the live menu ────────────────────
+  if (addItems && Array.isArray(addItems) && addItems.length > 0) {
+    if (order.items.length + addItems.length > MAX_ITEMS_PER_ORDER) {
+      throw new AppError(`Maximum ${MAX_ITEMS_PER_ORDER} items per order.`, 400);
+    }
+    const settings = await Settings.getSettings();
+    const activeSession = await fetchActiveSpecialSession();
+    const sessionItemIds = new Set((activeSession?.items || []).map((sid) => sid.toString()));
+    for (const cartItem of addItems) {
+      const newItem = await priceEditedOrderItem(cartItem, settings, activeSession, sessionItemIds);
+      order.items.push(newItem);
+    }
+  }
+
+  if (order.items.length === 0) {
+    throw new AppError("An order must have at least one item — cancel the order instead.", 400);
+  }
+
+  // ── Recompute totals whenever items changed ───────────────────────────────
+  if ((items && items.length > 0) || (removeItemIds && removeItemIds.length > 0) || (addItems && addItems.length > 0)) {
+    const subtotal = order.items.reduce((s, it) => s + it.totalPrice, 0);
+    order.subtotal = Math.round(subtotal * 100) / 100;
+    order.totalAmount = Math.round(
+      (order.subtotal + (order.deliveryFee || 0) + (order.taxAmount || 0) -
+        (order.couponDiscount || 0) - (order.walletDiscount || 0)) * 100
+    ) / 100;
+  }
+
+  await order.save();
+  await order.populate("items.menuItem", "name image");
+  emitOrderUpdate(order);
+  sendSuccess(res, { order }, "Order updated successfully");
 });
 
 // ─── Valid status transitions ─────────────────────────────────────────────────
@@ -706,13 +916,13 @@ exports.placeCelebrationOrder = catchAsync(async (req, res, next) => {
   }
 
   const subtotal = pricePerPerson * pax;
-  // Simplifying celebration checkout: delivery fee can be flat or 0 for now. Assuming 0 for simplicity.
-  const deliveryFee = deliveryType === "pickup" ? 0 : 100; // Let's set a flat 100 if delivery, or calculate if we have settings. We will keep it 100 for now or fetch settings.
-  // Wait, I should fetch settings for deliveryFee.
   const settings = await require("../models/Settings").getSettings();
-  let actualDeliveryFee = deliveryType === "pickup" ? 0 : (settings.deliveryFee || 100);
-  if (deliveryType !== "pickup" && settings.freeDeliveryThreshold && subtotal >= settings.freeDeliveryThreshold) {
-    actualDeliveryFee = 0;
+
+  let actualDeliveryFee = 0;
+  if (deliveryType !== "pickup") {
+    actualDeliveryFee = resolveDeliveryFee(settings, deliveryAddress).fee;
+    const deliveryThreshold = settings.freeDeliveryAbove ?? FREE_DELIVERY_ABOVE;
+    if (subtotal >= deliveryThreshold) actualDeliveryFee = 0;
   }
 
   const taxAmount = 0; // Simplified

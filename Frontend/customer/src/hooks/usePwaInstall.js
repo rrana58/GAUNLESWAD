@@ -1,9 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 
-/** Captures the browser's install prompt so we can trigger it from our own
- *  CTA button instead of waiting for the OS's default mini-infobar. Returns
- *  null on iOS Safari (no beforeinstallprompt support) — callers should
- *  show "Add to Home Screen" instructions there instead. */
+
 export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [isInstalled, setIsInstalled] = useState(

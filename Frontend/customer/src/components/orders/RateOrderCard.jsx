@@ -4,22 +4,7 @@ import { ordersApi } from '@/api/orders'
 import { getErrorMessage } from '@/lib/errorMessage'
 import StarRating from './StarRating'
 
-/**
- * RateOrderCard — Design System: Phase 4.6 Orders Migration
- *
- * Token changes:
- *  - Card: rounded-lg → var(--gs-radius-lg)
- *  - Textarea: rounded-lg → var(--gs-radius-lg); focus:border-primary → focus-visible:ring-2
- *  - Submit button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring + active:scale
- *
- * Accessibility:
- *  - Food rating: role="group" + aria-labelledby via useId()
- *  - Delivery rating: role="group" + aria-labelledby via useId()
- *  - Textarea: aria-label + id for explicit labeling
- *  - Submit: aria-busy + aria-disabled + descriptive aria-label
- *
- * handleSubmit, ordersApi.rateOrder, onRated callback unchanged.
- */
+
 export default function RateOrderCard({ order, onRated }) {
   const [foodRating, setFoodRating] = useState(0)
   const [deliveryRating, setDeliveryRating] = useState(0)

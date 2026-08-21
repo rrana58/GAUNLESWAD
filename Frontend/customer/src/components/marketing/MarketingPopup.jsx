@@ -7,23 +7,6 @@ import { cn } from '@/lib/utils'
 
 const STORAGE_KEY = 'gs-popup-seen'
 
-/**
- * MarketingPopup — Design System: Phase 4.2 Customer Home Migration
- *
- * Changes:
- *  - Backdrop z-index: z-60 → var(--gs-z-modal) token
- *  - Card z-index: z-60 → var(--gs-z-modal) token
- *  - Card border-radius: rounded-[1.5rem] → var(--gs-radius-2xl)
- *  - Card shadow: shadow-2xl → var(--gs-shadow-modal)
- *  - Card backdrop transition: duration-200 → var(--gs-motion-normal)
- *  - Close button: gs-focus-ring added for keyboard accessibility
- *  - CTA button: gs-focus-ring added
- *  - popup.bgColor is admin-controlled — retained as-is (intentional override)
- *  - All business/dismiss/popup logic unchanged
- *
- * Note: popup.bgColor fallback '#f97316' is admin-driven data, not a design
- * token. It is left as a configurable value per the admin panel's intent.
- */
 
 function popupId(popup) {
   return [popup.title, popup.message, popup.buttonText, popup.buttonLink, popup.validUntil]

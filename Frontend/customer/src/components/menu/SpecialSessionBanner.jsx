@@ -1,17 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Clock } from 'lucide-react'
 
-/**
- * SpecialSessionBanner — Design System: Phase 4.2 Customer Home Migration
- *
- * Replaced:
- *   bg-pine    → var(--gs-primary, #1B3A25) — Forest Green (bg-pine was undefined)
- *   text-paper → var(--gs-bg, #FAF8F5) — Warm Ivory text on dark background
- *   text-paper/80 → rgba on Warm Ivory
- *   text-paper/70 → rgba on Warm Ivory
- *
- * No countdown logic, API, or display logic changed.
- */
+
 function useCountdown(endHour) {
   const [label, setLabel] = useState('')
 

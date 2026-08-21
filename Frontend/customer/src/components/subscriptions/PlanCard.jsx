@@ -2,21 +2,7 @@ import { useState } from 'react'
 import { formatNpr, cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
 
-/**
- * PlanCard — Design System: Phase 4.2 Customer Home Migration
- *
- * Changes:
- *  - Card: rounded-lg → var(--gs-radius-xl) for consistent card radius
- *  - Card: added var(--gs-shadow-sm) elevation token
- *  - Package option buttons: added gs-focus-ring
- *  - Subscribe/View Details button: added gs-focus-ring, active:scale-[0.98]
- *  - Subscribe button: rounded-lg → var(--gs-radius-lg)
- *  - Package option: rounded-md → var(--gs-radius-md)
- *  - All Tailwind semantic tokens retained (border-border, bg-card, text-primary,
- *    bg-primary, text-primary-foreground, bg-muted, text-muted-foreground) ✅
- *
- * No subscription logic, option selection, or props changed.
- */
+
 export default function PlanCard({ plan, onSubscribe, disabled, compact = false }) {
   const options = [...(plan.pricingOptions || [])].sort((a, b) => a.meals - b.meals)
   const [selectedOpt, setSelectedOpt] = useState(options[0])

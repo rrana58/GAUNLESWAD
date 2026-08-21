@@ -1,14 +1,3 @@
-/**
- * Role-based URL resolver for Gaunle Swad portals.
- * Maps backend user roles to their corresponding portal routes/URLs.
- * 
- * Roles:
- * - customer -> Customer Home (/)
- * - admin -> Admin Dashboard (/admin/)
- * - kitchen -> Kitchen / Manager Dashboard (/kitchen/)
- * - delivery / rider -> Delivery / Staff Dashboard (/rider/)
- */
-
 export function isCapacitorNative() {
   if (typeof window !== 'undefined' && window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
     return window.Capacitor.isNativePlatform();

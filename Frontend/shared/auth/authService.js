@@ -1,7 +1,4 @@
-/**
- * Shared authentication API — accepts each app's configured axios instance.
- * Preserves existing backend contracts; extends login with optional TOTP fields.
- */
+
 export function createAuthService(api) {
   return {
     login(credentials) {

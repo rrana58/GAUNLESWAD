@@ -3,21 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Download, Check } from 'lucide-react'
 import { usePwaInstall } from '@/hooks/usePwaInstall'
 
-/**
- * Hero — Design System: Phase 4.2 Customer Home Migration
- *
- * Design tokens applied:
- *   --gs-primary       Forest Green background
- *   --gs-secondary     Faded Copper accent / search ring
- *   --gs-bg            Warm Ivory search bar background
- *   --gs-border        Search bar border
- *   --gs-text-sub      Search placeholder / muted text
- *   --gs-shadow-md     Search bar elevation
- *   --gs-radius-full   Search bar pill shape
- *   --gs-motion-normal Transition speed
- *
- * No business logic or search/install behavior changed.
- */
+
 export default function Hero() {
   const [query, setQuery] = useState('')
   const navigate = useNavigate()

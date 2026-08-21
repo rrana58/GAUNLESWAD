@@ -67,6 +67,7 @@ const orderSchema = new mongoose.Schema(
     items: [orderItemSchema],
     subtotal: { type: Number, required: true },
     deliveryFee: { type: Number, default: 0 },
+    deliveryDistanceKm: { type: Number },
     discount: { type: Number, default: 0 },
     taxAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, required: true },

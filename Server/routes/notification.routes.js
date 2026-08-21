@@ -3,6 +3,7 @@ const Notification = require("../models/Notification");
 const { protect, restrictTo } = require("../middleware/auth");
 const { validateObjectId } = require("../middleware/sanitize");
 const { sendSuccess } = require("../utils/response");
+const AppError = require("../utils/AppError");
 const catchAsync = require("../utils/catchAsync");
 
 router.use(protect);

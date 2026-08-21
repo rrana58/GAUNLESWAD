@@ -3,19 +3,7 @@ import { Home, CalendarDays, ShoppingBag, Menu as MenuIcon, LayoutGrid } from 'l
 import { useCartStore } from '@/store/cartStore'
 import { cn } from '@/lib/utils'
 
-/**
- * BottomNav — Design System: Phase 4.2 Customer Home Migration
- *
- * Changes:
- *  - Added gs-focus-ring to NavLink items for keyboard accessibility
- *  - Added z-index via --gs-z-sticky token on nav element
- *  - All Tailwind semantic tokens retained (bg-card, border-border, text-primary,
- *    text-muted-foreground, bg-secondary) — these correctly map to design system
- *  - Min height of each tab: h-16 (64px) > 44px minimum — WCAG compliant ✅
- *  - aria-current handled automatically by NavLink's active class
- *
- * No tab configuration or cart badge logic changed.
- */
+
 const TABS = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/categories', label: 'Categories', icon: LayoutGrid },

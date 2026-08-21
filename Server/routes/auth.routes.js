@@ -45,11 +45,11 @@ router.post(
 
 // Step 2: verify OTP + complete registration
 // POST /api/v1/auth/register/verify
-// Body: { phone, otp, name, password }
+// Body: { phone, otp, name, password, referralCode? }
 router.post(
   "/register/verify",
   authSlowDown,
-  allowFields("phone", "otp", "name", "password"),
+  allowFields("phone", "otp", "name", "password", "referralCode"),
   [
     phoneValidator,
     otpValidator,

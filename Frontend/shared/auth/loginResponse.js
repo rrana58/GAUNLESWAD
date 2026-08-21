@@ -1,4 +1,4 @@
-/** Thrown when credentials are valid but the user role does not match this portal. */
+
 export class WrongPortalError extends Error {
   constructor(expectedRole, actualRole) {
     super(`Access denied. ${roleLabel(expectedRole)} accounts only.`)

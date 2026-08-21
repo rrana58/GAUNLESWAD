@@ -20,7 +20,7 @@ export const useAuthStore = create(
       },
 
       logout: () => {
-        clearAuthSession()
+        clearAuthSession('admin')
         set({ 
           user: null, 
           accessToken: null, 

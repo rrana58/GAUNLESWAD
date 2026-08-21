@@ -117,7 +117,7 @@ exports.confirmTotpLogin = catchAsync(async (req, res) => {
     throw new AppError("Login session expired. Please sign in again.", 401);
   }
 
-  const user = await User.findById(userId).select("+totpSecret +totpEnabled +tokenVersion +refreshTokenHash");
+  const user = await User.findById(userId).select("+totpSecret +totpEnabled +tokenVersion +refreshTokens");
   if (!user || !user.isActive) throw new AppError("Account not found.", 401);
   if (!user.totpEnabled) throw new AppError("This account does not have TOTP enabled.", 400);
 
@@ -133,5 +133,5 @@ exports.confirmTotpLogin = catchAsync(async (req, res) => {
   await user.save({ validateBeforeSave: false });
 
   securityLogger.info(`Successful TOTP login for admin ${user._id} from IP ${req.ip}`);
-  await sendTokens(user, 200, res);
+  await sendTokens(user, 200, res, req.headers["user-agent"]);
 });

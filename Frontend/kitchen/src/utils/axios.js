@@ -21,11 +21,11 @@ attachSingleFlightRefresh(api, {
   apiUrl: API_URL,
   getRefreshToken: () => localStorage.getItem("refreshToken"),
   setTokens: (data) => {
-    const user = data.user || getStoredUser();
-    saveAuthSession(user, data.accessToken, data.refreshToken);
+    const user = data.user || getStoredUser("kitchen");
+    saveAuthSession(user, data.accessToken, data.refreshToken, "kitchen");
   },
   onRefreshFailed: () => {
-    clearAuthSession();
+    clearAuthSession("kitchen");
   },
   loginPath: "/kitchen/login",
 });

@@ -9,13 +9,13 @@ export default function Privacy() {
       <main className="flex-1 px-5 py-6 max-w-3xl mx-auto space-y-6 text-foreground" aria-label="Privacy Policy">
         <div className="border-b border-border pb-4">
           <h1 className="font-display text-2xl font-bold text-primary">Privacy Policy</h1>
-          <p className="text-xs text-muted-foreground mt-1">Last updated: August 2026 — Gharko Swad Cloud Kitchen (Pokhara, Nepal)</p>
+          <p className="text-xs text-muted-foreground mt-1">Last updated: August 2026 — Gaunle Swad Cloud Kitchen (Pokhara, Nepal)</p>
         </div>
 
         <section className="space-y-2">
           <h2 className="font-display text-base font-semibold text-foreground">1. Information We Collect</h2>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            We collect information you provide directly to us when using Gharko Swad, including your name, mobile phone number, delivery addresses, order preferences, and transaction history.
+            We collect information you provide directly to us when using Gaunle Swad, including your name, mobile phone number, delivery addresses, order preferences, and transaction history.
           </p>
         </section>
 

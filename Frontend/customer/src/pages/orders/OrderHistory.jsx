@@ -6,32 +6,7 @@ import { ordersApi } from '@/api/orders'
 import { formatNpr, cn } from '@/lib/utils'
 import PageHeader from '@/components/layout/PageHeader'
 
-/**
- * OrderHistory — Design System: Phase 4.6 Orders Migration
- *
- * Token changes:
- *  - Order card link: rounded-lg → var(--gs-radius-lg); added var(--gs-shadow-sm)
- *  - Status badge: rounded-full → var(--gs-radius-full)
- *  - Celebration badge: bg-purple-100 text-purple-700 rounded → var(--gs-secondary)/10 + text-secondary + var(--gs-radius-sm)
- *  - Pagination buttons: added h-11 w-11 touch targets + gs-focus-ring
- *  - Empty state link: added gs-focus-ring
- *  - Browse link: added gs-focus-ring
- *
- * Accessibility:
- *  - Page: <main> landmark for content area
- *  - Loading: role="status" aria-busy + gs-skeleton placeholder
- *  - Empty state: role="status"
- *  - Orders list: <ol role="list"> + aria-label with count
- *  - Each card: <li role="listitem">
- *  - Order link: descriptive aria-label with number/status/total/date
- *  - Status badge: aria-label on span
- *  - Rate star: aria-hidden on icon, "Rate this order" text retained
- *  - Star icon: aria-hidden="true"
- *  - Pagination: role="navigation" + aria-label + aria-current on page indicator
- *  - Previous/Next: descriptive aria-label
- *
- * Query, pagination state, API calls unchanged.
- */
+
 
 const STATUS_STYLES = {
   pending: 'bg-muted text-muted-foreground',

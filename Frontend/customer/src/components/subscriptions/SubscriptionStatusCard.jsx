@@ -1,20 +1,6 @@
 import { formatNpr, cn } from '@/lib/utils'
 
-/**
- * SubscriptionStatusCard — Design System: Phase 4.7 Profile & Remaining Migration
- *
- * Token changes:
- *  - Card: rounded-lg → var(--gs-radius-lg)
- *  - Status badge: rounded-full → var(--gs-radius-full)
- *
- * Accessibility:
- *  - Card: role="region" + aria-label with plan name + status
- *  - Status badge: aria-label with full status label
- *  - Stats grid: role="list" + each stat role="listitem"
- *  - Stat values: aria-label with label + value
- *
- * No data, props, or status logic changed.
- */
+
 const STATUS_LABELS = {
   pending: { label: 'Pending confirmation', style: 'bg-muted text-muted-foreground' },
   active: { label: 'Active', style: 'bg-accent text-accent-foreground' },

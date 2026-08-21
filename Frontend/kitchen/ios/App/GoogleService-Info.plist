@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "1081833511915",
+    "project_id": "gaunleswad-1a42b",
+    "storage_bucket": "gaunleswad-1a42b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1081833511915:android:0e7c089ba046373f3657ae",
+        "android_client_info": {
+          "package_name": "com.gaunleswad.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-EOeAVJaAaVxHTdnQrvH8Nw-CHkQfvRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1081833511915:android:0e70cd74399d87633657ae",
+        "android_client_info": {
+          "package_name": "com.gaunleswad.kitchen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-EOeAVJaAaVxHTdnQrvH8Nw-CHkQfvRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1081833511915:android:a4cb8e2ee203edd83657ae",
+        "android_client_info": {
+          "package_name": "com.gaunleswad.rider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-EOeAVJaAaVxHTdnQrvH8Nw-CHkQfvRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

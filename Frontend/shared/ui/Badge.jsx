@@ -1,9 +1,6 @@
 import React from 'react';
 
-/**
- * Standard Design System Status Badge
- * Status: pending | confirmed | preparing | ready | transit | delivered | cancelled
- */
+
 export function Badge({ status = 'confirmed', children, className = '' }) {
   const statusConfigs = {
     pending: 'bg-amber-100 text-amber-800 border-amber-200',

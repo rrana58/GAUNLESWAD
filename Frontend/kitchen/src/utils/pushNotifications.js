@@ -3,12 +3,7 @@ import { isCapacitorNative } from '@shared/auth/roleRedirect';
 import api from '../utils/axios';
 import { toast } from 'sonner';
 
-/**
- * Initialize Push Notifications for Kitchen app.
- * Called after successful kitchen staff login.
- * Registers FCM token with POST /api/v1/auth/fcm-token,
- * displays foreground toasts, and routes notification taps.
- */
+
 export async function initPushNotifications(navigate) {
   if (!isCapacitorNative()) {
     console.log('[PushNotifications] Skipping push notification setup on web platform.');

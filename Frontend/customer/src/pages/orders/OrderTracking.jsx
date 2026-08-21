@@ -11,34 +11,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import StatusTimeline from '@/components/orders/StatusTimeline'
 import RateOrderCard from '@/components/orders/RateOrderCard'
 
-/**
- * OrderTracking — Design System: Phase 4.6 Orders Migration
- *
- * Token changes:
- *  - justPlaced banner: rounded-lg → var(--gs-radius-lg)
- *  - Celebration section: bg-purple-50 rounded-xl border-purple-100 text-purple-800 text-purple-700 text-purple-200
- *    → bg-secondary/10 rounded [var(--gs-radius-xl)] border-secondary/20 text-foreground text-muted-foreground border-border
- *  - Rating already-submitted card: rounded-lg → var(--gs-radius-lg)
- *  - Items list: wrapped in ol role="list" + li role="listitem"
- *  - Cancel button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring + 44px height
- *  - Back-to-menu links: gs-focus-ring
- *
- * Accessibility:
- *  - Loading state: <main> + role="status" + aria-busy + gs-skeleton
- *  - Not-found state: <main> + role="status" + back link gs-focus-ring
- *  - justPlaced banner: role="status" (positive confirmation)
- *  - CheckCircle2 icon: aria-hidden="true"
- *  - Celebration section: aria-labelledby (section h2)
- *  - All <section>: aria-labelledby via useId()
- *  - Items list: role="list" + each item role="listitem"
- *  - Price summary: role="region" + aria-label
- *  - Cancel button: aria-busy + aria-label + X icon aria-hidden
- *  - Existing rating card: role="region" + aria-label
- *  - Payment section: aria-labelledby
- *  - Delivery address section: aria-labelledby
- *
- * No socket, fetchOrder, handleCancel, API, or routing logic changed.
- */
+
 const isMongoId = (v) => /^[0-9a-f]{24}$/.test(v)
 const isTrackingToken = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v)
 
@@ -87,8 +60,7 @@ export default function OrderTracking() {
     fetchOrder()
   }, [fetchOrder])
 
-  // Join the order's Socket.IO room once we know its real Mongo _id
-  // (the room name always uses _id, even when we arrived via a guest token).
+  
   useEffect(() => {
     if (!order?._id) return
 
@@ -98,13 +70,7 @@ export default function OrderTracking() {
     const handleUpdate = (updated) => {
       if (updated._id !== order._id) return
 
-      // The server only pushes a trimmed-down order over the socket (status,
-      // statusHistory, etc — see emitOrderUpdate in config/socket.js). Fields
-      // like paymentStatus aren't included, so merging `updated` directly
-      // would leave them stuck at whatever they were before this update (e.g.
-      // still showing "pending" after a COD order is marked paid on
-      // delivery). Re-fetching the full order keeps this page in sync with
-      // what admin sees.
+      
       fetchOrder()
 
       if (updated.status === 'delivered') {

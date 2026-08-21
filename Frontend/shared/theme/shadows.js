@@ -1,6 +1,3 @@
-/**
- * Gharko Swaad Design System — Elevation & Shadow Tokens
- */
 
 export const shadows = {
   none: 'none',

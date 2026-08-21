@@ -74,6 +74,11 @@ const specialSessionSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Guards against sending the start/end notification more than once for
+    // the same session — the check cron runs every few minutes, but each
+    // notification should only fire once.
+    startNotifiedAt: { type: Date, default: null },
+    endNotifiedAt: { type: Date, default: null },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

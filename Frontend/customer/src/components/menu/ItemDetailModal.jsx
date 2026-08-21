@@ -9,34 +9,7 @@ import { formatNpr, cn } from '@/lib/utils'
 import RatingStars from '@/components/menu/RatingStars'
 import { useNavigate } from 'react-router-dom'
 
-/**
- * ItemDetailModal — Design System: Phase 4.3 Product Detail Migration
- *
- * Token changes:
- *  - Bottom-sheet: rounded-t-[1.5rem] → var(--gs-radius-2xl); shadow-xl → var(--gs-shadow-modal)
- *  - Bottom-sheet bottom: rounded-b-[1.5rem] → var(--gs-radius-2xl)
- *  - Combo box: bg-orange-50/60 border-orange-100 → bg-primary/5 border-primary/20 (on-brand)
- *  - Combo item rows: bg-white border-slate-100 bg-slate-100 text-slate-800 → gs tokens
- *  - Skeletons: animate-pulse → gs-skeleton class
- *  - Backdrop: z-50 → var(--gs-z-modal); aria-hidden="true" added
- *  - Sheet: z-50 → var(--gs-z-modal)
- *  - Special instructions: focus:border-primary → focus-visible:ring-2 + focus-visible:border
- *  - Out-of-stock: rounded-lg → var(--gs-radius-lg)
- *  - Allergens badge: rounded → var(--gs-radius-full)
- *
- * Accessibility:
- *  - Bottom sheet: role="dialog", aria-modal="true", aria-labelledby linking to item h1
- *  - Close button: gs-focus-ring + proper aria-label
- *  - Variant/addon labels: each radio/checkbox gets id+htmlFor (native label association)
- *  - Quantity stepper: h-8 w-8 (32px) → h-11 w-11 (44px) WCAG touch target
- *  - Quantity display: aria-live="polite" for screen reader announcement
- *  - Add-to-cart: gs-focus-ring + aria-label with total price
- *  - Icon badges: title → aria-label on wrapper, aria-hidden on icon
- *  - Backdrop: onClick retained; aria-hidden so SR skips it
- *  - Focus trap: on open, focus is moved to the dialog
- *
- * No business logic, cart, API, or state management changed.
- */
+
 export default function ItemDetailModal() {
   const navigate = useNavigate()
   const { selectedItemId, isOpen, closeModal } = useItemModalStore()
@@ -50,7 +23,7 @@ export default function ItemDetailModal() {
   })
 
   const [selectedVariantId, setSelectedVariantId] = useState(null)
-  const [selectedAddonIds, setSelectedAddonIds] = useState([])
+  const [selectedAddons, setSelectedAddons] = useState([]) // Array of { addonId, quantity }
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
   const [prevItemId, setPrevItemId] = useState(selectedItemId)
@@ -59,7 +32,7 @@ export default function ItemDetailModal() {
   if (selectedItemId !== prevItemId) {
     setPrevItemId(selectedItemId)
     setSelectedVariantId(null)
-    setSelectedAddonIds([])
+    setSelectedAddons([])
     setQuantity(1)
     setNotes('')
   }
@@ -83,35 +56,95 @@ export default function ItemDetailModal() {
     const variants = item?.variants || []
     const explicit = variants.find((v) => v._id === selectedVariantId)
     if (explicit) return explicit
-    return variants.find((v) => v.isAvailable) || null
+    const firstAvailable = variants.find((v) => v.isAvailable)
+    return firstAvailable || null
+  }, [item, selectedVariantId])
+
+  
+  useEffect(() => {
+    if (item?.variants?.length > 0 && !selectedVariantId) {
+      const firstAvailable = item.variants.find((v) => v.isAvailable)
+      if (firstAvailable) {
+        setSelectedVariantId(firstAvailable._id)
+      }
+    }
   }, [item, selectedVariantId])
 
   const unitPrice = useMemo(() => {
-    const base = selectedVariant ? selectedVariant.price : item?.basePrice || 0
-    const addonsTotal = (item?.addons || [])
-      .filter((a) => selectedAddonIds.includes(a._id))
-      .reduce((sum, a) => sum + a.price, 0)
+    const base = item?.variants?.length > 0
+      ? (selectedVariant ? (selectedVariant.discountedPrice ?? selectedVariant.price) : 0)
+      : (item?.discountedPrice ?? item?.basePrice ?? 0)
+    
+    const addonsTotal = selectedAddons.reduce((sum, sa) => {
+      const addon = (item?.addons || []).find((a) => a._id === sa.addonId)
+      return sum + (addon ? addon.price * sa.quantity : 0)
+    }, 0)
     return base + addonsTotal
-  }, [item, selectedVariant, selectedAddonIds])
+  }, [item, selectedVariant, selectedAddons])
+
+  
+  const rawUnitPrice = useMemo(() => {
+    const base = item?.variants?.length > 0
+      ? (selectedVariant ? selectedVariant.price : 0)
+      : (item?.basePrice ?? 0)
+
+    const addonsTotal = selectedAddons.reduce((sum, sa) => {
+      const addon = (item?.addons || []).find((a) => a._id === sa.addonId)
+      return sum + (addon ? addon.price * sa.quantity : 0)
+    }, 0)
+    return base + addonsTotal
+  }, [item, selectedVariant, selectedAddons])
+
+  const changeAddonQty = (addonId, change) => {
+    setSelectedAddons((prev) => {
+      const existing = prev.find((sa) => sa.addonId === addonId)
+      if (!existing) {
+        if (change > 0) return [...prev, { addonId, quantity: change }]
+        return prev
+      }
+      const newQty = existing.quantity + change
+      if (newQty <= 0) {
+        return prev.filter((sa) => sa.addonId !== addonId)
+      }
+      return prev.map((sa) => sa.addonId === addonId ? { ...sa, quantity: newQty } : sa)
+    })
+  }
+
+  
+  const selectedAddonIds = useMemo(
+    () => selectedAddons.map((sa) => sa.addonId),
+    [selectedAddons]
+  )
 
   const toggleAddon = (addonId) => {
-    setSelectedAddonIds((prev) =>
-      prev.includes(addonId) ? prev.filter((a) => a !== addonId) : [...prev, addonId]
-    )
+    const isSelected = selectedAddonIds.includes(addonId)
+    changeAddonQty(addonId, isSelected ? -1 : 1)
   }
 
   const handleAddToCart = () => {
-    const addons = (item.addons || []).filter((a) => selectedAddonIds.includes(a._id))
+    // Generate full list of addon IDs and names including repeats
+    const flatAddonIds = []
+    const flatAddonNames = []
+    selectedAddons.forEach((sa) => {
+      const addon = (item.addons || []).find((a) => a._id === sa.addonId)
+      if (addon) {
+        for (let i = 0; i < sa.quantity; i++) {
+          flatAddonIds.push(addon._id)
+          flatAddonNames.push(addon.name)
+        }
+      }
+    })
+
     addItem({
       menuItemId: item._id,
       name: item.name,
-      price: unitPrice,
+      price: rawUnitPrice,
       image: item.image?.url,
       quantity,
       variantId: selectedVariant?._id,
       variantName: selectedVariant?.name,
-      addonIds: addons.map((a) => a._id),
-      addonNames: addons.map((a) => a.name),
+      addonIds: flatAddonIds,
+      addonNames: flatAddonNames,
       specialInstructions: notes.trim() || undefined,
     })
     closeModal()
@@ -174,9 +207,9 @@ export default function ItemDetailModal() {
         <div className="flex-1 overflow-y-auto pb-24 mt-8">
           {isLoading ? (
             <div className="p-4 space-y-4">
-              <div className="aspect-4/3 gs-skeleton rounded-[var(--gs-radius-lg,0.75rem)]" />
-              <div className="h-6 w-2/3 gs-skeleton rounded-[var(--gs-radius-md,0.5rem)]" />
-              <div className="h-4 w-full gs-skeleton rounded-[var(--gs-radius-md,0.5rem)]" />
+              <div className="aspect-4/3 gs-skeleton rounded-(--gs-radius-lg,0.75rem)" />
+              <div className="h-6 w-2/3 gs-skeleton rounded-(--gs-radius-md,0.5rem)" />
+              <div className="h-4 w-full gs-skeleton rounded-(--gs-radius-md,0.5rem)" />
             </div>
           ) : !item ? (
             <div className="p-8 text-center text-muted-foreground">Item not found.</div>
@@ -333,7 +366,7 @@ export default function ItemDetailModal() {
                           key={v._id}
                           className={cn(
                             'flex items-center justify-between border-2 px-4 py-3 text-sm cursor-pointer transition-colors',
-                            'rounded-[var(--gs-radius-xl,1rem)]',
+                            'rounded-(--gs-radius-xl,1rem)]',
                             !v.isAvailable && 'opacity-40 pointer-events-none',
                             selectedVariantId === v._id
                               ? 'border-primary bg-primary/5'
@@ -348,12 +381,17 @@ export default function ItemDetailModal() {
                               onChange={() => setSelectedVariantId(v._id)}
                               disabled={!v.isAvailable}
                               className="accent-primary w-4 h-4"
-                              aria-label={`${v.name} — ${formatNpr(v.price)}`}
+                              aria-label={`${v.name} — ${formatNpr(v.discountedPrice ?? v.price)}`}
                             />
                             {v.name}
                           </span>
-                          <span className="font-mono font-semibold text-primary" aria-hidden="true">
-                            {formatNpr(v.price)}
+                          <span className="font-mono font-semibold text-primary flex items-center gap-1.5" aria-hidden="true">
+                            {v.discountedPrice != null && v.discountedPrice < v.price && (
+                              <span className="text-muted-foreground line-through font-normal text-xs">
+                                {formatNpr(v.price)}
+                              </span>
+                            )}
+                            {formatNpr(v.discountedPrice ?? v.price)}
                           </span>
                         </label>
                       ))}
@@ -376,7 +414,7 @@ export default function ItemDetailModal() {
                           key={a._id}
                           className={cn(
                             'flex items-center justify-between border-2 px-4 py-3 text-sm cursor-pointer transition-colors',
-                            'rounded-[var(--gs-radius-xl,1rem)]',
+                            'rounded-(--gs-radius-xl,1rem)',
                             !a.isAvailable && 'opacity-40 pointer-events-none',
                             selectedAddonIds.includes(a._id)
                               ? 'border-primary bg-primary/5'

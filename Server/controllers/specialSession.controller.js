@@ -99,6 +99,14 @@ exports.updateSession = catchAsync(async (req, res) => {
   if (endHour !== undefined) session.endHour = endHour;
   if (activeDate !== undefined) session.activeDate = activeDate;
 
+  // Timing changed — this is effectively a re-schedule, so let it notify
+  // again for its (new) start/end rather than staying silently skipped
+  // because the old schedule already fired once.
+  if (startHour !== undefined || endHour !== undefined || activeDate !== undefined) {
+    session.startNotifiedAt = null;
+    session.endNotifiedAt = null;
+  }
+
   await session.save();
   await bustCache();
   const populated = await session.populate("items", "name image basePrice");

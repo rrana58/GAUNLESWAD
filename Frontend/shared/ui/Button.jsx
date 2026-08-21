@@ -1,10 +1,6 @@
 import React from 'react';
 
-/**
- * Standard Design System Button Primitive
- * Variant: primary | secondary | ghost | danger
- * Size: sm | md | lg
- */
+
 export function Button({
   children,
   variant = 'primary',

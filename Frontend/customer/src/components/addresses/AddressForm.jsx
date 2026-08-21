@@ -4,27 +4,7 @@ import { toast } from 'sonner'
 import { addressApi } from '@/api/orders'
 import { getErrorMessage } from '@/lib/errorMessage'
 
-/**
- * AddressForm — Design System: Phase 4.5 Checkout Migration
- *
- * Token changes:
- *  - All rounded-lg → var(--gs-radius-lg)
- *  - All inputs: outline-none focus:border-primary → focus-visible:ring-2 focus-visible:border-primary
- *  - Label buttons: rounded-lg → var(--gs-radius-lg) + gs-focus-ring + aria-pressed
- *  - Save/Cancel buttons: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *  - Location button: rounded-lg → var(--gs-radius-lg) + gs-focus-ring
- *
- * Accessibility:
- *  - form: aria-label="Add new address"
- *  - Label picker: role="radiogroup" + aria-label; each button: aria-pressed
- *  - All inputs: aria-label + aria-required on required fields
- *  - "Set as default" checkbox: htmlFor/id pairing
- *  - Location button: aria-busy during geolocation
- *  - Save button: aria-busy + aria-disabled during submission
- *  - LocateFixed icon: aria-hidden="true"
- *
- * No geolocation logic, form state, validation, or onSubmit changed.
- */
+
 const LABELS = ['Home', 'Work', 'Other']
 
 export default function AddressForm({ initial, onSubmit, onCancel, submitting }) {

@@ -38,12 +38,13 @@ const buildTokenPayload = (user, accessToken, refreshToken) => ({
 });
 
 // ─── Send tokens in response ──────────────────────────────────────────────────
-const sendTokens = async (user, statusCode, res) => {
+const sendTokens = async (user, statusCode, res, userAgent) => {
   const accessToken = signAccessToken(user._id, user.role, user.tokenVersion);
   const refreshToken = signRefreshToken(user._id);
 
-  // Store refresh token hash on user document (not the raw token)
-  user.setRefreshToken(refreshToken);
+  // Store refresh token hash on user document (not the raw token) — adds
+  // this as a new concurrent session rather than replacing any existing one.
+  user.setRefreshToken(refreshToken, userAgent);
   await user.save({ validateBeforeSave: false });
 
   res.status(statusCode).json(buildTokenPayload(user, accessToken, refreshToken));

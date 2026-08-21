@@ -14,14 +14,14 @@ router.get("/track/:token", orderController.trackOrder);
 router.post(
   "/celebration",
   optionalAuth,
-  allowFields("packageId", "dietaryPreference", "pax", "deliveryAddress", "deliveryType", "paymentMethod", "specialInstructions", "guestInfo", "celebrationDetails", "fullPayment"),
+  allowFields("packageId", "menuId", "dietaryPreference", "pax", "deliveryAddress", "deliveryType", "paymentMethod", "couponCode", "useWallet", "specialInstructions", "guestInfo", "celebrationDetails", "fullPayment"),
   orderController.placeCelebrationOrder
 );
 
 router.post(
   "/",
   optionalAuth,
-  allowFields("items","deliveryAddress","deliveryType","paymentMethod","couponCode","specialInstructions","guestInfo","scheduledFor"),
+  allowFields("items","deliveryAddress","deliveryType","paymentMethod","couponCode","specialInstructions","guestInfo","scheduledFor","useWallet"),
   [
     body("items").isArray({ min: 1, max: 20 }).withMessage("Order must have 1–20 items"),
     body("items.*.menuItemId").isMongoId().withMessage("Invalid menu item ID"),
@@ -103,11 +103,8 @@ router.patch(
   allowFields("reason"),
   [
     body("reason").optional().isString().isLength({ max: 500 }),
-    // Admins must justify cancelling someone else's order — matches the
-    // controller-level guard in cancelOrder(); kept here too as defense in depth
-    // and to surface a clean 422 before any DB work happens.
     body("reason").custom((value, { req }) => {
-      if (req.user?.role === "admin" && !value?.trim()) {
+      if (["admin", "kitchen"].includes(req.user?.role) && !value?.trim()) {
         throw new Error("A cancellation reason is required.");
       }
       return true;
@@ -115,6 +112,29 @@ router.patch(
   ],
   validate,
   orderController.cancelOrder
+);
+
+router.patch(
+  "/:id/edit",
+  restrictTo("admin", "kitchen"),
+  validateObjectId("id"),
+  allowFields("items", "removeItemIds", "addItems", "specialInstructions", "adminNote"),
+  [
+    body("items").optional().isArray({ max: 20 }),
+    body("items.*._id").optional().isMongoId().withMessage("Invalid item id"),
+    body("items.*.quantity").optional().isInt({ min: 1, max: 10 }).withMessage("Quantity must be 1–10"),
+    body("removeItemIds").optional().isArray({ max: 20 }),
+    body("removeItemIds.*").optional().isMongoId().withMessage("Invalid item id"),
+    body("addItems").optional().isArray({ max: 20 }),
+    body("addItems.*.menuItemId").optional().isMongoId().withMessage("Invalid menu item id"),
+    body("addItems.*.quantity").optional().isInt({ min: 1, max: 10 }).withMessage("Quantity must be 1–10"),
+    body("addItems.*.variantId").optional().isMongoId().withMessage("Invalid variant id"),
+    body("addItems.*.addonIds").optional().isArray({ max: 5 }),
+    body("specialInstructions").optional().isString().isLength({ max: 500 }),
+    body("adminNote").optional().isString().isLength({ max: 500 }),
+  ],
+  validate,
+  orderController.editOrder
 );
 
 router.post(

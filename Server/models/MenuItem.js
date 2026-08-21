@@ -26,8 +26,11 @@ const menuItemSchema = new mongoose.Schema(
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
-      required: [true, "Category is required"],
     },
+    categories: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+    }],
     image: { url: String, publicId: String },
     basePrice: {
       type: Number,
@@ -104,12 +107,19 @@ menuItemSchema.pre("save", function (next) {
       .replace(/[^a-z0-9-]/g, "")
       .substring(0, 80);
   }
+  // Ensure categories and category sync seamlessly
+  if (this.categories && this.categories.length > 0) {
+    if (!this.category) this.category = this.categories[0];
+  } else if (this.category) {
+    this.categories = [this.category];
+  }
   next();
 });
 
 // FIX: all indexes defined here only — not duplicated in field definitions above
 menuItemSchema.index({ slug: 1 }, { unique: true, sparse: true });
 menuItemSchema.index({ category: 1, isAvailable: 1 });
+menuItemSchema.index({ categories: 1, isAvailable: 1 });
 menuItemSchema.index({ isFeatured: -1, sortOrder: 1 });
 menuItemSchema.index({ name: "text", description: "text", tags: "text" });
 // Needed for dashboard analytics sorting

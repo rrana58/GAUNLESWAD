@@ -1,12 +1,7 @@
 import { forwardRef } from 'react'
 import { cn } from '@/lib/utils'
 
-/**
- * PhoneField — Design System: Phase 4.1 Auth Migration
- * Focus: wrapper receives focus-within ring using --gs-primary token.
- * Input itself uses outline-none — focus is communicated via the wrapper border.
- * WCAG AA: border-width increases and ring-color contrast > 3:1 on white.
- */
+
 const PhoneField = forwardRef(function PhoneField({ error, className, ...props }, ref) {
   return (
     <div className={cn('flex flex-col gap-1', className)}>

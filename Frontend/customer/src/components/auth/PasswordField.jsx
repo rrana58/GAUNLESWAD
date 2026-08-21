@@ -2,12 +2,7 @@ import { forwardRef, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/**
- * PasswordField — Design System: Phase 4.1 Auth Migration
- * Focus: wrapper receives focus-within ring using --gs-primary token.
- * Toggle button uses gs-focus-ring from provider.css for keyboard visibility.
- * WCAG AA: focus ring contrast ratio > 3:1, touch target 44px min height.
- */
+
 const PasswordField = forwardRef(function PasswordField(
   { error, className, placeholder = 'Password', ...props },
   ref

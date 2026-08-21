@@ -91,7 +91,7 @@ exports.verifyAndRegister = catchAsync(async (req, res) => {
   const { phone, otp, name, password, referralCode } = req.body;
 
   const user = await User.findOne({ phone, isPhoneVerified: false }).select(
-    "+otp +otpExpiry +otpAttempts +otpLockedUntil +tokenVersion +refreshTokenHash"
+    "+otp +otpExpiry +otpAttempts +otpLockedUntil +tokenVersion +refreshTokens"
   );
 
   if (!user) {
@@ -165,7 +165,7 @@ exports.verifyAndRegister = catchAsync(async (req, res) => {
   await user.save();
 
   securityLogger.info(`New registration: ${user._id} from IP ${req.ip}`);
-  await sendTokens(user, 201, res);
+  await sendTokens(user, 201, res, req.headers["user-agent"]);
 });
 
 // ─── LOGIN — phone + password (no OTP) ───────────────────────────────────────
@@ -183,7 +183,7 @@ exports.login = catchAsync(async (req, res) => {
   else if (phone) query.phone = phone;
 
   const user = await User.findOne(query).select(
-    "+password +tokenVersion +refreshTokenHash +totpEnabled"
+    "+password +tokenVersion +refreshTokens +totpEnabled"
   );
 
   // Always run bcrypt even if user not found — prevents timing-based enumeration
@@ -223,7 +223,7 @@ exports.login = catchAsync(async (req, res) => {
   await user.save({ validateBeforeSave: false });
 
   securityLogger.info(`Login: ${user._id} from IP ${req.ip}`);
-  await sendTokens(user, 200, res);
+  await sendTokens(user, 200, res, req.headers["user-agent"]);
 });
 
 // ─── FORGOT PASSWORD — Step 1: send OTP ──────────────────────────────────────
@@ -257,7 +257,7 @@ exports.resetPasswordWithOtp = catchAsync(async (req, res) => {
   const { phone, otp, newPassword } = req.body;
 
   const user = await User.findOne({ phone, isPhoneVerified: true }).select(
-    "+otp +otpExpiry +otpAttempts +otpLockedUntil +password +tokenVersion +refreshTokenHash"
+    "+otp +otpExpiry +otpAttempts +otpLockedUntil +password +tokenVersion +refreshTokens"
   );
 
   if (!user) throw new AppError("Invalid request.", 400);
@@ -293,7 +293,7 @@ exports.resetPasswordWithOtp = catchAsync(async (req, res) => {
   user.otpLockedUntil = undefined;
   // Invalidate all existing sessions (force re-login everywhere)
   user.tokenVersion = (user.tokenVersion || 0) + 1;
-  user.refreshTokenHash = undefined;
+  user.refreshTokens = [];
 
   await user.save();
 
@@ -328,7 +328,7 @@ exports.changePassword = catchAsync(async (req, res) => {
   const { currentPassword, otp, newPassword } = req.body;
 
   const user = await User.findById(req.user._id).select(
-    "+password +tokenVersion +refreshTokenHash +otp +otpExpiry +otpAttempts +otpLockedUntil"
+    "+password +tokenVersion +refreshTokens +otp +otpExpiry +otpAttempts +otpLockedUntil"
   );
 
   if (!user) throw new AppError("Account not found.", 404);
@@ -372,7 +372,7 @@ exports.changePassword = catchAsync(async (req, res) => {
   user.otpLockedUntil = undefined;
   // Invalidate ALL sessions — force re-login on every device
   user.tokenVersion = (user.tokenVersion || 0) + 1;
-  user.refreshTokenHash = undefined;
+  user.refreshTokens = [];
   await user.save();
 
   securityLogger.info(`Password changed with OTP: ${user._id} from IP ${req.ip}`);
@@ -403,32 +403,46 @@ exports.refreshToken = catchAsync(async (req, res) => {
   const presentedHash = hashRefreshToken(refreshToken);
   const newRefreshToken = signRefreshToken(decoded.id);
   const newHash = hashRefreshToken(newRefreshToken);
+  const userAgent = (req.headers["user-agent"] || "").slice(0, 200);
 
   const loginEntry = {
     ip: req.ip,
-    userAgent: (req.headers["user-agent"] || "").slice(0, 200),
+    userAgent,
     at: new Date(),
   };
 
-  // Atomic rotation — avoids Mongoose __v conflicts when concurrent refreshes hit.
+  // Atomic rotation — matches if presentedHash exists ANYWHERE in the
+  // sessions array (not just as the single most-recent one), so refreshing
+  // from device B doesn't invalidate device A's still-valid session. Pulls
+  // out just the matched entry and pushes the newly rotated one in its
+  // place, leaving every other concurrent session untouched.
   const user = await User.findOneAndUpdate(
-    { _id: decoded.id, refreshTokenHash: presentedHash, isActive: true },
+    { _id: decoded.id, "refreshTokens.hash": presentedHash, isActive: true },
     {
-      $set: { refreshTokenHash: newHash },
-      $push: { loginHistory: { $each: [loginEntry], $slice: -10 } },
+      $pull: { refreshTokens: { hash: presentedHash } },
+      $push: {
+        loginHistory: { $each: [loginEntry], $slice: -10 },
+      },
     },
     { new: true }
   );
 
   if (!user) {
-    const existing = await User.findById(decoded.id).select("+refreshTokenHash +tokenVersion");
+    const existing = await User.findById(decoded.id).select("+refreshTokens +tokenVersion");
     if (!existing || !existing.isActive) throw new AppError("Account not found.", 401);
 
     // Concurrent loser or replay of a rotated token — reject only; do not bump
-    // tokenVersion or clear refreshTokenHash (that caused cascade logouts).
+    // tokenVersion or clear other sessions (that caused cascade logouts).
     securityLogger.warn(`Refresh token rejected (stale): ${existing._id} from IP ${req.ip}`);
     throw new AppError("Invalid or expired session. Please log in again.", 401);
   }
+
+  // Push the freshly rotated session back in as a second update — kept
+  // separate from the $pull above since Mongo doesn't allow $pull and
+  // $push on the same array path in one update call.
+  user.refreshTokens.push({ hash: newHash, userAgent });
+  if (user.refreshTokens.length > 5) user.refreshTokens = user.refreshTokens.slice(-5);
+  await user.save({ validateBeforeSave: false });
 
   const accessToken = signAccessToken(user._id, user.role, user.tokenVersion);
   res.status(200).json(buildTokenPayload(user, accessToken, newRefreshToken));
@@ -491,9 +505,18 @@ exports.updateFcmToken = catchAsync(async (req, res) => {
 });
 
 // ─── LOGOUT ───────────────────────────────────────────────────────────────────
+// Removes only THIS device's session, so other concurrent sessions (e.g. a
+// rider's other phone/tablet) stay logged in. Falls back to clearing every
+// session if the client doesn't send its refreshToken (older app builds).
 exports.logout = catchAsync(async (req, res) => {
-  const user = await User.findById(req.user._id).select("+refreshTokenHash");
-  user.refreshTokenHash = undefined;
+  const { refreshToken } = req.body || {};
+  const user = await User.findById(req.user._id).select("+refreshTokens");
+  if (refreshToken) {
+    const presentedHash = hashRefreshToken(refreshToken);
+    user.refreshTokens = (user.refreshTokens || []).filter((rt) => rt.hash !== presentedHash);
+  } else {
+    user.refreshTokens = [];
+  }
   await user.save({ validateBeforeSave: false });
   sendSuccess(res, {}, "Logged out successfully");
 });
@@ -502,7 +525,7 @@ exports.logout = catchAsync(async (req, res) => {
 exports.logoutAll = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id).select("+tokenVersion");
   user.tokenVersion = (user.tokenVersion || 0) + 1;
-  user.refreshTokenHash = undefined;
+  user.refreshTokens = [];
   await user.save({ validateBeforeSave: false });
   securityLogger.info(`Logout all devices: ${user._id} from IP ${req.ip}`);
   sendSuccess(res, {}, "Logged out from all devices");
@@ -519,28 +542,29 @@ exports.deleteAccount = catchAsync(async (req, res) => {
 
   const userId = user._id;
 
-  // 1. Cancel any active subscriptions
+  // 1. Cancel any active subscriptions (field is `customer`, not `user`)
   await Subscription.updateMany(
-    { user: userId, status: { $in: ["active", "paused"] } },
+    { customer: userId, status: { $in: ["active", "paused"] } },
     { $set: { status: "cancelled", cancelledAt: new Date(), cancelReason: "Account deleted by user" } }
   );
 
-  // 2. Anonymise order history — keep for business records but scrub PII
+  // 2. Anonymise order history — keep orders for business records, but
+  //    unlink them from the deleted account. (Previous code filtered by
+  //    `user` and tried to scrub `deliveryAddress.name/phone/instructions`
+  //    and `customerNote` — none of those fields exist on the Order model;
+  //    the real fields are `customer`, and there's no separate name/phone
+  //    snapshot on the address at all, only what's read via the populated
+  //    `customer` ref or `guestInfo`. That mismatch meant this whole step
+  //    silently matched zero documents — deleted accounts stayed linked to
+  //    all their past orders forever despite the "permanently deleted"
+  //    claim.)
   await Order.updateMany(
-    { user: userId },
-    {
-      $set: {
-        "deliveryAddress.name": "Deleted User",
-        "deliveryAddress.phone": "0000000000",
-        "deliveryAddress.instructions": "",
-        customerNote: "",
-      },
-      $unset: { user: 1 },
-    }
+    { customer: userId },
+    { $unset: { customer: 1 } }
   );
 
-  // 3. Delete reviews
-  await Review.deleteMany({ user: userId });
+  // 3. Delete reviews (field is `customer`, not `user`)
+  await Review.deleteMany({ customer: userId });
 
   // 4. Delete notifications
   await Notification.deleteMany({ user: userId });

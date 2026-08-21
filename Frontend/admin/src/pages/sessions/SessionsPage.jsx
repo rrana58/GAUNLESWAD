@@ -50,12 +50,17 @@ function SessionModal({ session, onClose, onSave }) {
     items: session?.items?.map((i) => i._id || i) || [],
   })
   const [loading, setLoading] = useState(false)
+  const [itemSearch, setItemSearch] = useState('')
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const { data: availableItems = [] } = useQuery({
     queryKey: ['availableItems'],
     queryFn: () => getAvailableItems().then((r) => r.data.items || []),
   })
+
+  const filteredAvailableItems = availableItems.filter((item) =>
+    item.name.toLowerCase().includes(itemSearch.toLowerCase())
+  )
 
   const toggleItem = (id) => {
     setForm((f) => ({
@@ -207,14 +212,23 @@ function SessionModal({ session, onClose, onSave }) {
           <legend>
             <Label>Select Items ({form.items.length} selected) *</Label>
           </legend>
+          <Input
+            type="search"
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            placeholder="Search items…"
+            aria-label="Search menu items"
+          />
           <div
             className="border border-border rounded-lg max-h-56 overflow-y-auto divide-y divide-border bg-card"
             style={{ borderRadius: 'var(--gs-admin-radius-lg)' }}
           >
             {availableItems.length === 0 ? (
               <p className="text-sm text-muted-foreground p-4 text-center">No menu items available</p>
+            ) : filteredAvailableItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground p-4 text-center">No items match "{itemSearch}"</p>
             ) : (
-              availableItems.map((item) => (
+              filteredAvailableItems.map((item) => (
                 <div key={item._id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors">
                   <input
                     id={`item-${item._id}`}

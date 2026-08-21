@@ -1,6 +1,3 @@
-/**
- * Gharko Swaad Design System — Motion & Transition Tokens
- */
 
 export const motion = {
   fast: '150ms cubic-bezier(0.4, 0, 0.2, 1)',

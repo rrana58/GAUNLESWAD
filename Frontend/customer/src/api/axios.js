@@ -8,13 +8,32 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Single-flight refresh: if several requests need a refresh at once, only one
-// /auth/refresh call goes out and the rest wait on the same promise.
+
+const AUTH_STORAGE_KEY = 'gharko-swad-auth'
 let refreshPromise = null
+
+function readPersistedTokens() {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)?.state || null
+  } catch {
+    return null
+  }
+}
 
 function refreshAccessToken() {
   if (!refreshPromise) {
     const refreshToken = useAuthStore.getState().refreshToken
+
+    // Another tab may have already rotated this exact token — adopt its
+    // result instead of sending a token we can already tell is stale.
+    const persistedBefore = readPersistedTokens()
+    if (persistedBefore?.refreshToken && persistedBefore.refreshToken !== refreshToken && persistedBefore.accessToken) {
+      useAuthStore.getState().setAuth(persistedBefore.user, persistedBefore.accessToken, persistedBefore.refreshToken)
+      return Promise.resolve(persistedBefore.accessToken)
+    }
+
     if (!refreshToken) return Promise.reject(new Error('No refresh token'))
 
     refreshPromise = axios
@@ -26,6 +45,13 @@ function refreshAccessToken() {
         return data.accessToken
       })
       .catch((err) => {
+        // Another tab may have refreshed while our request was in flight —
+        // if so, this isn't actually a dead session.
+        const persistedAfter = readPersistedTokens()
+        if (persistedAfter?.refreshToken && persistedAfter.refreshToken !== refreshToken && persistedAfter.accessToken) {
+          useAuthStore.getState().setAuth(persistedAfter.user, persistedAfter.accessToken, persistedAfter.refreshToken)
+          return persistedAfter.accessToken
+        }
         useAuthStore.getState().logout()
         throw err
       })

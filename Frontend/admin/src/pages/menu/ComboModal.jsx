@@ -71,6 +71,7 @@ export default function ComboModal({ combo, categories, allMenuItems, onClose, o
   const [imagePreview, setImagePreview] = useState(combo?.image?.url || null)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [itemSearch, setItemSearch] = useState('')
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -266,6 +267,16 @@ export default function ComboModal({ combo, categories, allMenuItems, onClose, o
             </div>
           </legend>
 
+          <div className="mb-2">
+            <Input
+              type="search"
+              placeholder="Filter available items list..."
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+
           {form.comboItems.length === 0 ? (
             <div
               className="text-center py-6 text-muted-foreground border-2 border-dashed border-border text-sm"
@@ -286,11 +297,13 @@ export default function ComboModal({ combo, categories, allMenuItems, onClose, o
                     aria-label={`Combo item ${idx + 1}: select menu item`}
                   >
                     <option value="">Select a menu item...</option>
-                    {allMenuItems.filter((i) => !i.isCombo).map((item) => (
-                      <option key={item._id} value={item._id}>
-                        {item.name} (Rs. {item.basePrice})
-                      </option>
-                    ))}
+                    {allMenuItems
+                      .filter((i) => !i.isCombo && (!itemSearch || i.name.toLowerCase().includes(itemSearch.toLowerCase())))
+                      .map((item) => (
+                        <option key={item._id} value={item._id}>
+                          {item.name} (Rs. {item.basePrice})
+                        </option>
+                      ))}
                   </select>
                   <Input
                     type="number"

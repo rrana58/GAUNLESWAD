@@ -52,7 +52,25 @@ const userSchema = new mongoose.Schema(
     otpAttempts: { type: Number, default: 0, select: false },
     otpLockedUntil: { type: Date, select: false },
     tokenVersion: { type: Number, default: 0, select: false },
-    refreshTokenHash: { type: String, select: false },
+    // Multiple concurrent sessions (phone + tablet + reinstall, etc.) — was
+    // a single `refreshTokenHash` string, which meant logging in on a
+    // second device silently invalidated the first device's session. It
+    // kept working until its short-lived access token expired, then
+    // failed to refresh with no obvious trigger from that device's point
+    // of view — surfacing as "randomly logs out after a while". Capped at
+    // MAX_CONCURRENT_SESSIONS; oldest is dropped once the cap is hit.
+    refreshTokens: {
+      type: [
+        {
+          hash: { type: String, required: true },
+          createdAt: { type: Date, default: Date.now },
+          userAgent: String,
+          _id: false,
+        },
+      ],
+      select: false,
+      default: [],
+    },
     passwordChangedAt: { type: Date, select: false },
     lastLogin: Date,
     lastLoginIp: { type: String, select: false },
@@ -85,7 +103,7 @@ const userSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         delete ret.password; delete ret.otp; delete ret.otpExpiry;
         delete ret.otpAttempts; delete ret.otpLockedUntil; delete ret.tokenVersion;
-        delete ret.refreshTokenHash; delete ret.passwordChangedAt;
+        delete ret.refreshTokens; delete ret.passwordChangedAt;
         delete ret.lastLoginIp; delete ret.deletedAt; delete ret.__v;
         return ret;
       },
@@ -150,16 +168,23 @@ userSchema.methods.verifyOTP = function (candidate) {
   return { valid: true };
 };
 
-userSchema.methods.setRefreshToken = function (rawToken) {
-  this.refreshTokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+const MAX_CONCURRENT_SESSIONS = 5;
+
+userSchema.methods.setRefreshToken = function (rawToken, userAgent) {
+  const hash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  this.refreshTokens = this.refreshTokens || [];
+  this.refreshTokens.push({ hash, userAgent: (userAgent || "").slice(0, 200) });
+  if (this.refreshTokens.length > MAX_CONCURRENT_SESSIONS) {
+    this.refreshTokens = this.refreshTokens.slice(-MAX_CONCURRENT_SESSIONS);
+  }
 };
 
 userSchema.methods.verifyRefreshToken = function (rawToken) {
   const hash = crypto.createHash("sha256").update(rawToken).digest("hex");
-  return crypto.timingSafeEqual(
-    Buffer.from(this.refreshTokenHash || ""),
-    Buffer.from(hash)
-  );
+  return (this.refreshTokens || []).some((rt) => {
+    if (!rt.hash || rt.hash.length !== hash.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(rt.hash), Buffer.from(hash));
+  });
 };
 
 userSchema.methods.softDelete = async function () {
