@@ -91,7 +91,9 @@ async function fetchActiveSpecialSession() {
 }
 
 // ─── Price calculation (pure — no side effects) ───────────────────────────────
-const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, dbSession, deliveryType, deliveryAddress) => {
+// userFcmTokens is passed in to allow push notifications about low meal-plan
+// balance — the function has no access to req, so the caller must pass it.
+const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, dbSession, deliveryType, deliveryAddress, userFcmTokens) => {
   if (cartItems.length > MAX_ITEMS_PER_ORDER)
     throw new AppError(`Maximum ${MAX_ITEMS_PER_ORDER} items per order.`, 400);
 
@@ -204,9 +206,9 @@ const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, db
         }
 
         const remainingMeals = eligibility.subscription.maxMeals - eligibility.subscription.mealsUsed;
-        if ((remainingMeals === 2 || remainingMeals === 1) && req.user?.fcmTokens?.length) {
+        if ((remainingMeals === 2 || remainingMeals === 1) && userFcmTokens?.length) {
           sendMulticastPush(
-            req.user.fcmTokens,
+            userFcmTokens,
             "Low Meal Warning ⚠️",
             `You only have ${remainingMeals} meal(s) left in your subscription! Renew your plan now to avoid missing your daily lunch.`,
             { type: "subscription_alert" }
@@ -221,6 +223,7 @@ const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, db
           usageIds: eligibility.usageIds,
         });
 
+        // Addon cost applies to ALL quantity (free + paid). Unit price is only for paid units.
         const itemTotal = paidQty * unitPrice + addonTotal * cartItem.quantity;
         subtotal += itemTotal;
         if (!Number.isFinite(itemTotal) || itemTotal < 0)
@@ -375,7 +378,10 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
     await dbSession.withTransaction(async () => {
       // Meal-plan claims happen outside the transaction (they have their own
       // atomic MongoDB update). Track them so we can roll back if needed.
-      const calcResult = await calculateOrderTotals(items, couponCode, userId, useWallet, dbSession, deliveryType, deliveryAddress);
+      const calcResult = await calculateOrderTotals(
+        items, couponCode, userId, useWallet, dbSession, deliveryType, deliveryAddress,
+        req.user?.fcmTokens  // pass for low-meal-plan push notification
+      );
       const { orderItems, subtotal, taxAmount, deliveryFee, deliveryDistanceKm, couponDiscount, walletDiscount, totalAmount,
         appliedCoupon, activeSession } = calcResult;
       
@@ -441,20 +447,32 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
       }
 
       // ── Decrement stockQuantity for items that have inventory tracking ────
-      for (const cartItem of items) {
-        const menuItem = await MenuItem.findOne({
-          _id: cartItem.menuItemId,
-          stockQuantity: { $ne: null },
-        }).session(dbSession);
+      // Use a single bulkWrite instead of N individual findOne+findOneAndUpdate
+      // pairs inside a transaction — avoids O(2N) round-trips and the N+1 problem.
+      const stockDecrOps = items
+        .filter((ci) => {
+          const mi = menuItems.find((m) => m._id.toString() === ci.menuItemId);
+          return mi && mi.stockQuantity !== null && mi.stockQuantity !== undefined;
+        })
+        .map((ci) => ({
+          updateOne: {
+            filter: { _id: ci.menuItemId, stockQuantity: { $gte: ci.quantity } },
+            update: { $inc: { stockQuantity: -ci.quantity } },
+          },
+        }));
 
-        if (menuItem) {
-          const updated = await MenuItem.findOneAndUpdate(
-            { _id: cartItem.menuItemId, stockQuantity: { $gte: cartItem.quantity } },
-            { $inc: { stockQuantity: -cartItem.quantity } },
-            { new: true, session: dbSession }
-          );
-          if (!updated)
-            throw new AppError(`"${menuItem.name}" ran out of stock while you were checking out.`, 409);
+      if (stockDecrOps.length > 0) {
+        const bulkResult = await MenuItem.bulkWrite(stockDecrOps, { session: dbSession });
+        if (bulkResult.matchedCount < stockDecrOps.length) {
+          // At least one item was out of stock — find which one to give a useful error.
+          const failed = items.find((ci) => {
+            const mi = menuItems.find((m) => m._id.toString() === ci.menuItemId);
+            return mi && mi.stockQuantity !== null && mi.stockQuantity < ci.quantity;
+          });
+          const name = failed
+            ? menuItems.find((m) => m._id.toString() === failed.menuItemId)?.name || "An item"
+            : "An item";
+          throw new AppError(`"${name}" ran out of stock while you were checking out.`, 409);
         }
       }
 
@@ -696,13 +714,33 @@ exports.editOrder = catchAsync(async (req, res, next) => {
         throw new AppError(`Quantity must be between 1 and ${MAX_QUANTITY_PER_ITEM}.`, 400);
       }
       const addonsTotal = (orderItem.addons || []).reduce((s, a) => s + (a.price || 0), 0);
+      const oldQty = orderItem.quantity;
       orderItem.quantity = newQty;
       orderItem.totalPrice = Math.round((orderItem.unitPrice + addonsTotal) * newQty * 100) / 100;
+
+      // Restore stock if quantity was reduced for inventory-tracked items
+      const qtyDelta = oldQty - newQty;
+      if (qtyDelta > 0) {
+        await MenuItem.findOneAndUpdate(
+          { _id: orderItem.menuItem, stockQuantity: { $ne: null } },
+          { $inc: { stockQuantity: qtyDelta } }
+        ).catch(() => {});
+      }
     }
   }
 
   // ── Remove line items entirely ────────────────────────────────────────────
   if (removeItemIds && Array.isArray(removeItemIds) && removeItemIds.length > 0) {
+    // Restore stock for removed inventory-tracked items before filtering them out
+    for (const removedId of removeItemIds) {
+      const removedItem = order.items.find((it) => it._id.toString() === removedId);
+      if (removedItem) {
+        await MenuItem.findOneAndUpdate(
+          { _id: removedItem.menuItem, stockQuantity: { $ne: null } },
+          { $inc: { stockQuantity: removedItem.quantity } }
+        ).catch(() => {});
+      }
+    }
     order.items = order.items.filter((it) => !removeItemIds.includes(it._id.toString()));
   }
 
@@ -741,10 +779,13 @@ exports.editOrder = catchAsync(async (req, res, next) => {
 });
 
 // ─── Valid status transitions ─────────────────────────────────────────────────
+// Note: "cancelled" from "preparing" is allowed by admin/kitchen via the
+// cancel endpoint. We also allow it here via the status dropdown so staff
+// have a single consistent workflow without needing two different buttons.
 const VALID_TRANSITIONS = {
   pending:          ["confirmed", "cancelled"],
   confirmed:        ["preparing", "cancelled"],
-  preparing:        ["ready"],
+  preparing:        ["ready", "cancelled"],
   ready:            ["out_for_delivery", "delivered"],
   out_for_delivery: ["delivered"],
 };
@@ -952,7 +993,7 @@ exports.placeCelebrationOrder = catchAsync(async (req, res, next) => {
         if (addrType === "gps") {
           const coords = deliveryAddress.coordinates;
           const lat = Number(coords.lat), lng = Number(coords.lng);
-          const geocoded = await require("../utils/geocoder").reverseGeocode(lat, lng);
+          const geocoded = await reverseGeocode(lat, lng);
           resolvedAddress = {
             street:   (deliveryAddress.street   || geocoded.street).trim().slice(0, 200),
             area:     (deliveryAddress.area      || geocoded.area).trim().slice(0, 100),
@@ -1029,7 +1070,10 @@ exports.placeCelebrationOrder = catchAsync(async (req, res, next) => {
     } catch (pushErr) {
       // Non-critical — don't break order flow
     }
-    await require("../jobs/agenda").scheduleAutoCancel(order._id).catch(() => {});
+    // Auto-cancel unpaid celebration orders after 15 minutes
+    if (paymentMethod !== "cod") {
+      await scheduleAutoCancel(order._id).catch(() => {});
+    }
 
     // Notify admins about the new Celebration Booking
     try {
@@ -1054,4 +1098,34 @@ exports.placeCelebrationOrder = catchAsync(async (req, res, next) => {
   } finally {
     dbSession.endSession();
   }
+});
+
+// ─── Assign Rider to Order (Admin only) ───────────────────────────────────────
+exports.assignRider = catchAsync(async (req, res) => {
+  const { riderId } = req.body;
+  const order = await Order.findById(req.params.id);
+  if (!order) throw new AppError("Order not found.", 404);
+
+  if (["delivered", "cancelled", "refunded"].includes(order.status)) {
+    throw new AppError(`Cannot assign a rider to an order that is already ${order.status}.`, 400);
+  }
+
+  const rider = await User.findOne({ _id: riderId, role: "delivery", isActive: true });
+  if (!rider) throw new AppError("Rider not found or not a delivery user.", 404);
+
+  order.deliveryPerson = rider._id;
+  await order.save();
+  emitOrderUpdate(order);
+
+  // Notify the assigned rider immediately
+  if (rider.fcmTokens?.length) {
+    sendMulticastPush(
+      rider.fcmTokens,
+      "📦 You've Been Assigned an Order",
+      `Order #${order.orderNumber} has been assigned to you for delivery.`,
+      { orderId: String(order._id), type: "rider_assignment" }
+    ).catch(() => {});
+  }
+
+  sendSuccess(res, { order }, "Rider assigned successfully");
 });

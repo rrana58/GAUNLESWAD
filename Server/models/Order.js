@@ -11,6 +11,13 @@ const orderItemSchema = new mongoose.Schema({
   addons: [{ name: String, price: Number }],
   specialInstructions: String,
   totalPrice: { type: Number, required: true },
+  // Global discount applied to this item's unitPrice
+  globalDiscount: {
+    applied: { type: Boolean, default: false },
+    percent: Number,
+    label: String,
+    savedAmount: Number,
+  },
   // Special session discount applied to this item
   sessionDiscount: {
   applied: { type: Boolean, default: false },
@@ -97,6 +104,7 @@ const orderSchema = new mongoose.Schema(
       enum: ["pending","confirmed","preparing","ready","out_for_delivery","delivered","cancelled","refunded"],
       default: "pending",
     },
+    reviewNotified: { type: Boolean, default: false },
     statusHistory: [statusHistorySchema],
     paymentMethod: { type: String, enum: ["cod", "khalti", "esewa"], required: true },
     paymentStatus: { type: String, enum: ["pending", "paid", "advance_paid", "failed", "refunded"], default: "pending" },
@@ -131,7 +139,7 @@ orderSchema.pre("save", function (next) {
 
 orderSchema.index({ customer: 1, createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
-orderSchema.index({ orderNumber: 1 });
+orderSchema.index({ orderNumber: 1 }, { unique: true, sparse: true });
 orderSchema.index({ trackingToken: 1 });
 orderSchema.index({ "guestInfo.phone": 1 });
 // Standalone createdAt — required for fast dashboard revenue aggregation

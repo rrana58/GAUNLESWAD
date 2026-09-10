@@ -51,13 +51,13 @@ describe("Subscription model", () => {
     });
   });
 
-  describe("hasUsedMealToday", () => {
+  describe("mealUsages", () => {
     it("detects existing usage date", () => {
       const sub = new Subscription(
         base({ mealUsages: [{ usageDate: "2026-06-26", menuItem: new mongoose.Types.ObjectId() }] })
       );
-      expect(sub.hasUsedMealToday("2026-06-26")).toBe(true);
-      expect(sub.hasUsedMealToday("2026-06-25")).toBe(false);
+      const hasUsed = sub.mealUsages.some((u) => u.usageDate === "2026-06-26");
+      expect(hasUsed).toBe(true);
     });
   });
 

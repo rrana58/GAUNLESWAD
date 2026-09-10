@@ -86,20 +86,27 @@ const verifyEsewaPayment = async (encodedData) => {
 module.exports = { getEsewaPaymentData, verifyEsewaPayment };
 
 // ─── Refund ───────────────────────────────────────────────────────────────────
-// eSewa Refund: https://developer.esewa.com.np/#/refund
+// eSewa Refund API: POST /api/merchant/v2/refund/
+// Docs: https://developer.esewa.com.np/#/refund
 const refundEsewaPayment = async ({ transactionId, amount }) => {
-  const ESEWA_BASE = process.env.NODE_ENV === "production"
+  const ESEWA_REFUND_BASE = process.env.NODE_ENV === "production"
     ? "https://esewa.com.np"
     : "https://rc-epay.esewa.com.np";
+
+  // Signature for refund: same HMAC-SHA256 scheme
+  const signatureMessage = `transaction_uuid=${transactionId},product_code=${process.env.ESEWA_MERCHANT_CODE || "EPAYTEST"},total_amount=${amount}`;
+  const refundSignature = generateSignature(signatureMessage);
 
   try {
     const axios = require("axios");
     const res = await axios.post(
-      `${ESEWA_BASE}/api/epay/transaction/status/`,
+      `${ESEWA_REFUND_BASE}/api/merchant/v2/refund/`,
       {
-        product_code:   process.env.ESEWA_MERCHANT_CODE,
-        transaction_uuid: transactionId,
-        total_amount:   amount,
+        product_code:      process.env.ESEWA_MERCHANT_CODE || "EPAYTEST",
+        transaction_uuid:  transactionId,
+        total_amount:      amount,
+        signed_field_names: "transaction_uuid,product_code,total_amount",
+        signature:         refundSignature,
       },
       {
         headers: { "Content-Type": "application/json" },
@@ -107,7 +114,7 @@ const refundEsewaPayment = async ({ transactionId, amount }) => {
       }
     );
     // eSewa returns status "REFUNDED" on success
-    const success = res.data?.status === "REFUNDED" || res.data?.status === "COMPLETE";
+    const success = res.data?.status === "REFUNDED";
     return { success, raw: res.data };
   } catch (err) {
     const error = err.response?.data?.message || err.message;

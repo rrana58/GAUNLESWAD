@@ -67,6 +67,7 @@ const sendMulticastPush = async (fcmTokens, title, body, data = {}) => {
     let totalSuccess = 0;
     let totalFailure = 0;
 
+    const User = require("../models/User");
     for (let i = 0; i < fcmTokens.length; i += BATCH_SIZE) {
       const batch = fcmTokens.slice(i, i + BATCH_SIZE);
       const message = {
@@ -82,6 +83,32 @@ const sendMulticastPush = async (fcmTokens, title, body, data = {}) => {
       const response = await admin.messaging().sendEachForMulticast(message);
       totalSuccess += response.successCount;
       totalFailure += response.failureCount;
+
+      // Identify dead tokens in this batch
+      const deadTokens = [];
+      if (response.responses) {
+        response.responses.forEach((res, idx) => {
+          if (!res.success && res.error) {
+            const code = res.error.code || "";
+            const msg = res.error.message || "";
+            if (
+              code.includes("registration-token-not-registered") ||
+              msg.includes("registration-token-not-registered") ||
+              code.includes("messaging/invalid-argument")
+            ) {
+              deadTokens.push(batch[idx]);
+            }
+          }
+        });
+      }
+
+      if (deadTokens.length > 0) {
+        await User.updateMany(
+          { fcmTokens: { $in: deadTokens } },
+          { $pull: { fcmTokens: { $in: deadTokens } } }
+        );
+        logger.info(`Cleaned up ${deadTokens.length} dead FCM tokens during multicast`);
+      }
     }
 
     logger.info(`FCM multicast: ${totalSuccess} sent, ${totalFailure} failed (${fcmTokens.length} total tokens)`);

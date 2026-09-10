@@ -388,20 +388,35 @@ cron.schedule("*/5 * * * *", async () => {
     if (!candidates.length) return;
 
     const notify = async (session, { title, body }) => {
-      const users = await User.find({ isActive: true, role: "customer" }, { fcmTokens: 1 });
-      if (!users.length) return;
-      await Notification.insertMany(
-        users.map((u) => ({
+      const cursor = User.find({ isActive: true, role: "customer" }, { fcmTokens: 1 }).lean().cursor({ batchSize: 500 });
+      let batch = [];
+      for await (const userDoc of cursor) {
+        batch.push(userDoc);
+        if (batch.length >= 500) {
+          const notifications = batch.map((u) => ({
+            user: u._id, title, body, type: "promo",
+            data: { sessionId: session._id.toString() },
+            sentVia: ["in_app"],
+          }));
+          await Notification.insertMany(notifications, { ordered: false }).catch(() => {});
+          const tokens = batch.flatMap((u) => u.fcmTokens || []).filter(Boolean);
+          for (let i = 0; i < tokens.length; i += 500) {
+            await sendMulticastPush(tokens.slice(i, i + 500), title, body, { type: "session_promo" }).catch(() => {});
+          }
+          batch = [];
+        }
+      }
+      if (batch.length > 0) {
+        const notifications = batch.map((u) => ({
           user: u._id, title, body, type: "promo",
           data: { sessionId: session._id.toString() },
           sentVia: ["in_app"],
-        })),
-        { ordered: false }
-      ).catch((err) => logger.error(`[CRON] Session notify insert failed: ${err.message}`));
-
-      const allTokens = users.flatMap((u) => u.fcmTokens || []).filter(Boolean);
-      for (let i = 0; i < allTokens.length; i += 500) {
-        await sendMulticastPush(allTokens.slice(i, i + 500), title, body, { type: "session_promo" }).catch(() => {});
+        }));
+        await Notification.insertMany(notifications, { ordered: false }).catch(() => {});
+        const tokens = batch.flatMap((u) => u.fcmTokens || []).filter(Boolean);
+        for (let i = 0; i < tokens.length; i += 500) {
+          await sendMulticastPush(tokens.slice(i, i + 500), title, body, { type: "session_promo" }).catch(() => {});
+        }
       }
     };
 
@@ -490,28 +505,42 @@ cron.schedule("15 3 * * *", async () => {
       body = `${body} Enjoy ${settings.globalDiscountPercent}% off right now!`;
     }
 
-    const customers = await User.find(
-      { isActive: true, role: "customer" },
-      { fcmTokens: 1 }
-    );
-    if (!customers.length) return;
+    let customerCount = 0;
+    let pushTokenCount = 0;
+    const cursor = User.find({ isActive: true, role: "customer" }, { fcmTokens: 1 }).lean().cursor({ batchSize: 500 });
+    let batch = [];
 
-    // In-app notification (bell) for everyone
-    await Notification.insertMany(
-      customers.map((u) => ({ user: u._id, title, body, type: "promo", sentVia: ["in_app"] })),
-      { ordered: false }
-    ).catch((err) => logger.error(`[CRON] Weather promo notification insert failed: ${err.message}`));
+    const sendBatch = async (users) => {
+      const notifications = users.map((u) => ({ user: u._id, title, body, type: "promo", sentVia: ["in_app"] }));
+      await Notification.insertMany(notifications, { ordered: false }).catch((err) =>
+        logger.error(`[CRON] Weather promo notification insert failed: ${err.message}`)
+      );
 
-    // Push for whoever has the native app + a registered device
-    const allTokens = customers.flatMap((u) => u.fcmTokens || []).filter(Boolean);
-    for (let i = 0; i < allTokens.length; i += 500) {
-      await sendMulticastPush(allTokens.slice(i, i + 500), title, body, { type: "weather_promo" }).catch(() => {});
+      const tokens = users.flatMap((u) => u.fcmTokens || []).filter(Boolean);
+      pushTokenCount += tokens.length;
+      for (let i = 0; i < tokens.length; i += 500) {
+        await sendMulticastPush(tokens.slice(i, i + 500), title, body, { type: "weather_promo" }).catch(() => {});
+      }
+    };
+
+    for await (const userDoc of cursor) {
+      batch.push(userDoc);
+      customerCount++;
+      if (batch.length >= 500) {
+        await sendBatch(batch);
+        batch = [];
+      }
+    }
+    if (batch.length > 0) {
+      await sendBatch(batch);
     }
 
-    settings.weatherPromo.lastSentDate = today;
-    await settings.save({ validateBeforeSave: false });
+    if (customerCount > 0) {
+      settings.weatherPromo.lastSentDate = today;
+      await settings.save({ validateBeforeSave: false });
+    }
 
-    logger.info(`[CRON] Weather promo sent (${weather.temperatureC}°C, rainy=${weather.isRainy}) — ${customers.length} customers, ${allTokens.length} push tokens`);
+    logger.info(`[CRON] Weather promo sent (${weather.temperatureC}°C, rainy=${weather.isRainy}) — ${customerCount} customers, ${pushTokenCount} push tokens`);
   } catch (err) {
     logger.error(`[CRON] Weather promo failed: ${err.message}`);
   }

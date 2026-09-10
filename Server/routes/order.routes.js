@@ -165,4 +165,18 @@ router.patch(
   orderController.updateOrderStatus
 );
 
+// PATCH /orders/:id/assign-rider — admin assigns a delivery person
+// Body: { riderId }
+router.patch(
+  "/:id/assign-rider",
+  restrictTo("admin"),
+  validateObjectId("id"),
+  allowFields("riderId"),
+  [
+    body("riderId").isMongoId().withMessage("riderId must be a valid user ID"),
+  ],
+  validate,
+  orderController.assignRider
+);
+
 module.exports = router;

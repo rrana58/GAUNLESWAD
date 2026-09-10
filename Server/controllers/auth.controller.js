@@ -495,8 +495,15 @@ exports.updateFcmToken = catchAsync(async (req, res) => {
   if (!fcmToken || typeof fcmToken !== "string" || fcmToken.length > 500) {
     throw new AppError("Invalid FCM token.", 400);
   }
-  // FIX: $addToSet alone can exceed the 5-token limit if the validator is bypassed.
-  // Add first, then slice to keep only the 5 most recent tokens.
+
+  // Remove this token from ANY other user who may have registered it previously
+  // (handles User A → User B device hand-off — prevents User A receiving User B's alerts).
+  await User.updateMany(
+    { _id: { $ne: req.user._id }, fcmTokens: fcmToken },
+    { $pull: { fcmTokens: fcmToken } }
+  );
+
+  // Add to current user (no-op if already present), then cap at 5 most-recent tokens.
   await User.findByIdAndUpdate(req.user._id, { $addToSet: { fcmTokens: fcmToken } });
   await User.findByIdAndUpdate(req.user._id, {
     $push: { fcmTokens: { $each: [], $slice: -5 } },

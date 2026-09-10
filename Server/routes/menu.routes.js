@@ -8,12 +8,16 @@ router.get("/", menuController.getMenu);
 router.get("/grouped", menuController.getMenuGroupedByCategory);
 router.get("/categories", menuController.getCategories);
 router.get("/celebrations", menuController.getCelebrationMenu);
+
+// Admin-only routes MUST be registered before /:id to avoid being shadowed
+// by the wildcard param route (Express matches top-to-bottom).
+router.get("/admin/list", protect, restrictTo("admin"), menuController.getMenuAdmin);
+
+// Wildcard param route — must be LAST among GETs
 router.get("/:id", menuController.getMenuItem);
 
-// Admin only
+// Admin-only middleware for all remaining write operations
 router.use(protect, restrictTo("admin"));
-// Admin listing (returns unavailable/toggled-off items too — see controller comment)
-router.get("/admin/list", menuController.getMenuAdmin);
 router.post("/upload/image", uploadMenu.single("image"), menuController.uploadMenuImage);
 router.post("/categories", menuController.createCategory);
 router.patch("/categories/:id", menuController.updateCategory);

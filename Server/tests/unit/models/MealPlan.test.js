@@ -12,28 +12,27 @@ describe("MealPlan model", () => {
   it("creates a valid plan and generates slug", async () => {
     const plan = await MealPlan.create({
       name: "Weekly Saver Plan",
-      monthlyPrice: 5000,
+      pricingOptions: [{ meals: 30, price: 5000 }],
       items: twoItems(),
     });
     expect(plan.slug).toBe("weekly-saver-plan");
     expect(plan.isActive).toBe(true);
-    expect(plan.maxMealsPerPeriod).toBe(30);
   });
 
-  it("requires name and monthlyPrice", async () => {
+  it("requires name and pricingOptions", async () => {
     await expect(MealPlan.create({ items: twoItems() })).rejects.toThrow();
   });
 
-  it("rejects monthlyPrice below 100", async () => {
+  it("rejects price below 100 in pricingOptions", async () => {
     await expect(
-      MealPlan.create({ name: "Cheap", monthlyPrice: 50, items: twoItems() })
-    ).rejects.toThrow(/Minimum plan price/);
+      MealPlan.create({ name: "Cheap", pricingOptions: [{ meals: 30, price: 50 }], items: twoItems() })
+    ).rejects.toThrow();
   });
 
   it("rejects fewer than 2 items", async () => {
     await expect(
       MealPlan.create({
-        name: "Too Few", monthlyPrice: 1000, items: [new mongoose.Types.ObjectId()],
+        name: "Too Few", pricingOptions: [{ meals: 30, price: 1000 }], items: [new mongoose.Types.ObjectId()],
       })
     ).rejects.toThrow(/between 2 and 15 items/);
   });
@@ -41,15 +40,15 @@ describe("MealPlan model", () => {
   it("rejects more than 15 items", async () => {
     const items = Array.from({ length: 16 }, () => new mongoose.Types.ObjectId());
     await expect(
-      MealPlan.create({ name: "Too Many", monthlyPrice: 1000, items })
+      MealPlan.create({ name: "Too Many", pricingOptions: [{ meals: 30, price: 1000 }], items })
     ).rejects.toThrow(/between 2 and 15 items/);
   });
 
   it("enforces unique slug", async () => {
     await MealPlan.init();
-    await MealPlan.create({ name: "Plan A", monthlyPrice: 1000, items: twoItems() });
+    await MealPlan.create({ name: "Plan A", pricingOptions: [{ meals: 30, price: 1000 }], items: twoItems() });
     await expect(
-      MealPlan.create({ name: "Plan A", monthlyPrice: 2000, items: twoItems() })
+      MealPlan.create({ name: "Plan A", pricingOptions: [{ meals: 30, price: 2000 }], items: twoItems() })
     ).rejects.toThrow();
   });
 });

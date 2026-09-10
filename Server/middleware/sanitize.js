@@ -1,13 +1,26 @@
 const xss = require("xss");
 
+// Fields that must NEVER be XSS-encoded — encoding changes their value and
+// breaks bcrypt comparison or token validation (e.g. a password containing
+// `<` gets stored as `&lt;` and can never match again).
+const SKIP_XSS_KEYS = new Set([
+  "password", "newPassword", "currentPassword",
+  "otp", "fcmToken", "refreshToken", "totpChallengeToken",
+  "token", "pidx", "data",
+]);
+
 // ─── Deep sanitize all string values in an object ────────────────────────────
-const sanitizeValue = (val) => {
-  if (typeof val === "string") return xss(val.trim());
-  if (Array.isArray(val)) return val.map(sanitizeValue);
+const sanitizeValue = (val, key) => {
+  if (typeof val === "string") {
+    // Never XSS-encode sensitive fields — they are validated separately
+    if (key && SKIP_XSS_KEYS.has(key)) return val;
+    return xss(val.trim());
+  }
+  if (Array.isArray(val)) return val.map((v) => sanitizeValue(v));
   if (val && typeof val === "object" && !(val instanceof Buffer)) {
     const clean = {};
-    for (const key of Object.keys(val)) {
-      clean[key] = sanitizeValue(val[key]);
+    for (const k of Object.keys(val)) {
+      clean[k] = sanitizeValue(val[k], k);
     }
     return clean;
   }

@@ -62,7 +62,11 @@ exports.updateCategory = catchAsync(async (req, res) => {
 });
 
 exports.deleteCategory = catchAsync(async (req, res) => {
-  const itemCount = await MenuItem.countDocuments({ category: req.params.id });
+  // FIX: check both `category` (legacy singular) and `categories` (new array)
+  // to prevent deleting a category that still has items linked through either field.
+  const itemCount = await MenuItem.countDocuments({
+    $or: [{ category: req.params.id }, { categories: req.params.id }],
+  });
   if (itemCount > 0) throw new AppError(`Cannot delete category: ${itemCount} menu items exist`, 400);
 
   await Category.findByIdAndDelete(req.params.id);

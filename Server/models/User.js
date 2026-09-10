@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema(
       maxlength: 254,
       match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Invalid email format"],
     },
-    password: { type: String, minlength: 8, maxlength: 16, select: false },
+    password: { type: String, minlength: 8, select: false },
     role: { type: String, enum: ["customer", "admin", "delivery", "kitchen"], default: "customer" },
     isPhoneVerified: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
