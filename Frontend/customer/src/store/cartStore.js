@@ -4,16 +4,19 @@ import api from '@/api/axios'
 
 
 function lineKey(item) {
-  return [item.menuItemId, item.variantId || '', ...(item.addonIds || []).slice().sort()].join('|')
+  return [item.menuItemId, item.specialInstructions || ''].join('|')
 }
 
 // Helper to notify backend (fire and forget)
 const syncCartWithServer = async (items) => {
+  // Only sync when logged in — unauthenticated calls hit a protected endpoint
+  // and generate noise in the security log (401 for every guest cart change).
   try {
-    const hasItems = items.length > 0;
-    await api.post('/auth/cart-activity', { hasItems });
-  } catch (error) {
-    // Ignore errors for this background telemetry
+    const { useAuthStore } = await import('@/store/authStore')
+    if (!useAuthStore.getState().isAuthenticated) return
+    await api.post('/auth/cart-activity', { hasItems: items.length > 0 })
+  } catch {
+    // Ignore errors — this is background telemetry only
   }
 }
 

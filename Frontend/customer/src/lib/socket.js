@@ -1,7 +1,9 @@
 import { io } from 'socket.io-client'
 import { useAuthStore } from '@/store/authStore'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'
+import { getApiUrl } from '@/api/axios'
+
+const API_URL = getApiUrl()
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL.replace(/\/api\/v\d+\/?$/, '')
 
 let socket = null

@@ -24,44 +24,20 @@ export default function ItemDetail() {
     queryFn: () => menuApi.getReviews(id).then((r) => r.data.reviews),
   })
 
-  const [selectedVariantId, setSelectedVariantId] = useState(null)
-  const [selectedAddonIds, setSelectedAddonIds] = useState([])
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
 
-  const selectedVariant = useMemo(() => {
-    const variants = item?.variants || []
-    const explicit = variants.find((v) => v._id === selectedVariantId)
-    if (explicit) return explicit
-    return variants.find((v) => v.isAvailable) || null
-  }, [item, selectedVariantId])
-
   const unitPrice = useMemo(() => {
-    const base = selectedVariant ? selectedVariant.price : item?.basePrice || 0
-    const addonsTotal = (item?.addons || [])
-      .filter((a) => selectedAddonIds.includes(a._id))
-      .reduce((sum, a) => sum + a.price, 0)
-    return base + addonsTotal
-  }, [item, selectedVariant, selectedAddonIds])
-
-  const toggleAddon = (addonId) => {
-    setSelectedAddonIds((prev) =>
-      prev.includes(addonId) ? prev.filter((a) => a !== addonId) : [...prev, addonId]
-    )
-  }
+    return item?.discountedPrice ?? item?.basePrice ?? 0
+  }, [item])
 
   const handleAddToCart = () => {
-    const addons = (item.addons || []).filter((a) => selectedAddonIds.includes(a._id))
     addItem({
       menuItemId: item._id,
       name: item.name,
       price: unitPrice,
       image: item.image?.url,
       quantity,
-      variantId: selectedVariant?._id,
-      variantName: selectedVariant?.name,
-      addonIds: addons.map((a) => a._id),
-      addonNames: addons.map((a) => a.name),
       specialInstructions: notes.trim() || undefined,
     })
     toast.success(`${item.name} added to cart`)
@@ -201,99 +177,6 @@ export default function ItemDetail() {
                     <p className="text-xs text-muted-foreground">Quantity: {ci.quantity}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Variant selector */}
-        {item.variants?.length > 0 && !item.isCombo && (
-          <div className="mt-5">
-            <h2
-              className="font-display text-sm text-foreground mb-2"
-              id="variant-label"
-            >
-              Choose an option
-            </h2>
-            <div
-              className="flex flex-col gap-2"
-              role="radiogroup"
-              aria-labelledby="variant-label"
-            >
-              {item.variants.map((v) => (
-                <label
-                  key={v._id}
-                  className={cn(
-                    'flex items-center justify-between border px-3 py-2.5 text-sm cursor-pointer transition-colors',
-                    'rounded-[var(--gs-radius-lg,0.75rem)]',
-                    !v.isAvailable && 'opacity-40 pointer-events-none',
-                    selectedVariantId === v._id
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border'
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="variant"
-                      checked={selectedVariantId === v._id}
-                      onChange={() => setSelectedVariantId(v._id)}
-                      disabled={!v.isAvailable}
-                      className="accent-primary"
-                      aria-label={`${v.name} — ${formatNpr(v.price)}`}
-                    />
-                    {v.name}
-                  </span>
-                  <span className="font-mono text-muted-foreground" aria-hidden="true">
-                    {formatNpr(v.price)}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Add-on selector */}
-        {item.addons?.length > 0 && (
-          <div className="mt-5">
-            <h2
-              className="font-display text-sm text-foreground mb-2"
-              id="addon-label"
-            >
-              Add-ons
-            </h2>
-            <div
-              className="flex flex-col gap-2"
-              role="group"
-              aria-labelledby="addon-label"
-            >
-              {item.addons.map((a) => (
-                <label
-                  key={a._id}
-                  className={cn(
-                    'flex items-center justify-between border px-3 py-2.5 text-sm cursor-pointer transition-colors',
-                    'rounded-[var(--gs-radius-lg,0.75rem)]',
-                    !a.isAvailable && 'opacity-40 pointer-events-none',
-                    selectedAddonIds.includes(a._id)
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border'
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedAddonIds.includes(a._id)}
-                      onChange={() => toggleAddon(a._id)}
-                      disabled={!a.isAvailable}
-                      className="accent-primary"
-                      aria-label={`Add ${a.name} — +${formatNpr(a.price)}`}
-                    />
-                    {a.name}
-                  </span>
-                  <span className="font-mono text-muted-foreground" aria-hidden="true">
-                    +{formatNpr(a.price)}
-                  </span>
-                </label>
               ))}
             </div>
           </div>

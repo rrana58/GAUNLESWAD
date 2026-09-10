@@ -22,8 +22,6 @@ export default function ItemDetailModal() {
     enabled: !!selectedItemId && isOpen,
   })
 
-  const [selectedVariantId, setSelectedVariantId] = useState(null)
-  const [selectedAddons, setSelectedAddons] = useState([]) // Array of { addonId, quantity }
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
   const [prevItemId, setPrevItemId] = useState(selectedItemId)
@@ -31,8 +29,6 @@ export default function ItemDetailModal() {
   // Reset state when a new item is opened (render phase update)
   if (selectedItemId !== prevItemId) {
     setPrevItemId(selectedItemId)
-    setSelectedVariantId(null)
-    setSelectedAddons([])
     setQuantity(1)
     setNotes('')
   }
@@ -52,99 +48,21 @@ export default function ItemDetailModal() {
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, closeModal])
 
-  const selectedVariant = useMemo(() => {
-    const variants = item?.variants || []
-    const explicit = variants.find((v) => v._id === selectedVariantId)
-    if (explicit) return explicit
-    const firstAvailable = variants.find((v) => v.isAvailable)
-    return firstAvailable || null
-  }, [item, selectedVariantId])
-
-  
-  useEffect(() => {
-    if (item?.variants?.length > 0 && !selectedVariantId) {
-      const firstAvailable = item.variants.find((v) => v.isAvailable)
-      if (firstAvailable) {
-        setSelectedVariantId(firstAvailable._id)
-      }
-    }
-  }, [item, selectedVariantId])
-
   const unitPrice = useMemo(() => {
-    const base = item?.variants?.length > 0
-      ? (selectedVariant ? (selectedVariant.discountedPrice ?? selectedVariant.price) : 0)
-      : (item?.discountedPrice ?? item?.basePrice ?? 0)
-    
-    const addonsTotal = selectedAddons.reduce((sum, sa) => {
-      const addon = (item?.addons || []).find((a) => a._id === sa.addonId)
-      return sum + (addon ? addon.price * sa.quantity : 0)
-    }, 0)
-    return base + addonsTotal
-  }, [item, selectedVariant, selectedAddons])
+    return item?.discountedPrice ?? item?.basePrice ?? 0
+  }, [item])
 
-  
   const rawUnitPrice = useMemo(() => {
-    const base = item?.variants?.length > 0
-      ? (selectedVariant ? selectedVariant.price : 0)
-      : (item?.basePrice ?? 0)
-
-    const addonsTotal = selectedAddons.reduce((sum, sa) => {
-      const addon = (item?.addons || []).find((a) => a._id === sa.addonId)
-      return sum + (addon ? addon.price * sa.quantity : 0)
-    }, 0)
-    return base + addonsTotal
-  }, [item, selectedVariant, selectedAddons])
-
-  const changeAddonQty = (addonId, change) => {
-    setSelectedAddons((prev) => {
-      const existing = prev.find((sa) => sa.addonId === addonId)
-      if (!existing) {
-        if (change > 0) return [...prev, { addonId, quantity: change }]
-        return prev
-      }
-      const newQty = existing.quantity + change
-      if (newQty <= 0) {
-        return prev.filter((sa) => sa.addonId !== addonId)
-      }
-      return prev.map((sa) => sa.addonId === addonId ? { ...sa, quantity: newQty } : sa)
-    })
-  }
-
-  
-  const selectedAddonIds = useMemo(
-    () => selectedAddons.map((sa) => sa.addonId),
-    [selectedAddons]
-  )
-
-  const toggleAddon = (addonId) => {
-    const isSelected = selectedAddonIds.includes(addonId)
-    changeAddonQty(addonId, isSelected ? -1 : 1)
-  }
+    return item?.basePrice ?? 0
+  }, [item])
 
   const handleAddToCart = () => {
-    // Generate full list of addon IDs and names including repeats
-    const flatAddonIds = []
-    const flatAddonNames = []
-    selectedAddons.forEach((sa) => {
-      const addon = (item.addons || []).find((a) => a._id === sa.addonId)
-      if (addon) {
-        for (let i = 0; i < sa.quantity; i++) {
-          flatAddonIds.push(addon._id)
-          flatAddonNames.push(addon.name)
-        }
-      }
-    })
-
     addItem({
       menuItemId: item._id,
       name: item.name,
-      price: rawUnitPrice,
+      price: item.discountedPrice ?? item.basePrice ?? rawUnitPrice,
       image: item.image?.url,
       quantity,
-      variantId: selectedVariant?._id,
-      variantName: selectedVariant?.name,
-      addonIds: flatAddonIds,
-      addonNames: flatAddonNames,
       specialInstructions: notes.trim() || undefined,
     })
     closeModal()
@@ -343,100 +261,6 @@ export default function ItemDetailModal() {
                           </div>
                         )
                       })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Variant selector */}
-                {item.variants?.length > 0 && (
-                  <div className="mt-6">
-                    <h2
-                      className="font-display font-semibold text-base text-foreground mb-3"
-                      id="variant-heading"
-                    >
-                      Choose an option
-                    </h2>
-                    <div
-                      className="flex flex-col gap-2.5"
-                      role="radiogroup"
-                      aria-labelledby="variant-heading"
-                    >
-                      {item.variants.map((v) => (
-                        <label
-                          key={v._id}
-                          className={cn(
-                            'flex items-center justify-between border-2 px-4 py-3 text-sm cursor-pointer transition-colors',
-                            'rounded-(--gs-radius-xl,1rem)]',
-                            !v.isAvailable && 'opacity-40 pointer-events-none',
-                            selectedVariantId === v._id
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-border/80'
-                          )}
-                        >
-                          <span className="flex items-center gap-3 font-medium">
-                            <input
-                              type="radio"
-                              name="variant"
-                              checked={selectedVariantId === v._id}
-                              onChange={() => setSelectedVariantId(v._id)}
-                              disabled={!v.isAvailable}
-                              className="accent-primary w-4 h-4"
-                              aria-label={`${v.name} — ${formatNpr(v.discountedPrice ?? v.price)}`}
-                            />
-                            {v.name}
-                          </span>
-                          <span className="font-mono font-semibold text-primary flex items-center gap-1.5" aria-hidden="true">
-                            {v.discountedPrice != null && v.discountedPrice < v.price && (
-                              <span className="text-muted-foreground line-through font-normal text-xs">
-                                {formatNpr(v.price)}
-                              </span>
-                            )}
-                            {formatNpr(v.discountedPrice ?? v.price)}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Add-on selector */}
-                {item.addons?.length > 0 && (
-                  <div className="mt-6">
-                    <h2
-                      className="font-display font-semibold text-base text-foreground mb-3"
-                      id="addon-heading"
-                    >
-                      Add-ons
-                    </h2>
-                    <div className="flex flex-col gap-2.5" role="group" aria-labelledby="addon-heading">
-                      {item.addons.map((a) => (
-                        <label
-                          key={a._id}
-                          className={cn(
-                            'flex items-center justify-between border-2 px-4 py-3 text-sm cursor-pointer transition-colors',
-                            'rounded-(--gs-radius-xl,1rem)',
-                            !a.isAvailable && 'opacity-40 pointer-events-none',
-                            selectedAddonIds.includes(a._id)
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-border/80'
-                          )}
-                        >
-                          <span className="flex items-center gap-3 font-medium">
-                            <input
-                              type="checkbox"
-                              checked={selectedAddonIds.includes(a._id)}
-                              onChange={() => toggleAddon(a._id)}
-                              disabled={!a.isAvailable}
-                              className="accent-primary w-4 h-4 rounded"
-                              aria-label={`Add ${a.name} — +${formatNpr(a.price)}`}
-                            />
-                            {a.name}
-                          </span>
-                          <span className="font-mono font-semibold text-primary" aria-hidden="true">
-                            +{formatNpr(a.price)}
-                          </span>
-                        </label>
-                      ))}
                     </div>
                   </div>
                 )}

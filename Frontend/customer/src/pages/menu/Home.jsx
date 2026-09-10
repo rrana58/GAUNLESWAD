@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect } from 'react'
+import { useMemo, useRef, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams, useLocation, Link, useNavigate } from 'react-router-dom'
 import { menuApi } from '@/api/menu'
@@ -8,6 +8,7 @@ import CategoryChips from '@/components/menu/CategoryChips'
 import MenuItemCard from '@/components/menu/MenuItemCard'
 import PlanCard from '@/components/subscriptions/PlanCard'
 import { useSettingsStore } from '@/store/settingsStore'
+import { getApiUrl, setCustomApiUrl } from '@/api/axios'
 
 export default function Home() {
   const [searchParams] = useSearchParams()
@@ -15,8 +16,10 @@ export default function Home() {
   const location = useLocation()
   const navigate = useNavigate()
   const sectionRefs = useRef({})
+  const [showServerConfig, setShowServerConfig] = useState(false)
+  const [customServerUrl, setCustomServerUrl] = useState(getApiUrl())
 
-  const { data: groupedData, isLoading: isMenuLoading } = useQuery({
+  const { data: groupedData, isLoading: isMenuLoading, isError: isMenuError, refetch: refetchMenu } = useQuery({
     queryKey: ['menu', 'grouped'],
     queryFn: () => menuApi.getGrouped().then((r) => r.data.menu),
     enabled: !searchQuery,
@@ -101,7 +104,7 @@ export default function Home() {
     <div className="pb-8">
       {!isMenuLoading && categories.length > 0 && (
         <div
-          className="sticky top-0 z-[var(--gs-z-sticky,1100)] bg-background/95 backdrop-blur pt-4 pb-2"
+          className="sticky top-0 z-(--gs-z-sticky,1100) bg-background/95 backdrop-blur pt-4 pb-2"
           style={{ boxShadow: 'var(--gs-shadow-sm)' }}
         >
           <CategoryChips categories={categories} activeId={null} onSelect={handleCategorySelect} />
@@ -152,8 +155,65 @@ export default function Home() {
       {isMenuLoading && (
         <div className="px-4 pt-6 grid grid-cols-2 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="aspect-4/3 gs-skeleton" />
+            <div key={i} className="aspect-4/3 gs-skeleton rounded-2xl" />
           ))}
+        </div>
+      )}
+
+      {isMenuError && (
+        <div className="mx-4 mt-6 p-4 text-center border border-amber-300 bg-amber-50 text-amber-900 rounded-2xl shadow-sm">
+          <div className="text-2xl mb-1">📡</div>
+          <h3 className="font-display font-semibold text-base">Unable to connect to Server</h3>
+          <p className="text-xs text-amber-800 mt-1 mb-3">
+            Could not reach backend API at <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[11px] break-all">{getApiUrl()}</code>
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => refetchMenu()}
+              className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl shadow active:scale-95 transition-transform"
+            >
+              Retry Connection
+            </button>
+            <button
+              onClick={() => setShowServerConfig(!showServerConfig)}
+              className="px-3 py-2 bg-amber-200 text-amber-900 text-xs font-semibold rounded-xl active:scale-95 transition-transform"
+            >
+              {showServerConfig ? 'Close' : 'Change Server IP'}
+            </button>
+          </div>
+
+          {showServerConfig && (
+            <div className="mt-4 pt-3 border-t border-amber-200 text-left">
+              <label className="block text-xs font-bold text-amber-900 mb-1">
+                Backend API URL:
+              </label>
+              <input
+                type="text"
+                value={customServerUrl}
+                onChange={(e) => setCustomServerUrl(e.target.value)}
+                placeholder="e.g. http://192.168.1.100:5000/api/v1"
+                className="w-full text-xs p-2.5 border border-amber-300 rounded-lg bg-white font-mono"
+              />
+              <p className="text-[11px] text-amber-700 mt-1">
+                For physical Android phone testing on Wi-Fi: use your PC's local IP address (e.g. <code>http://192.168.X.X:5000/api/v1</code>).<br/>
+                For Android Emulator: use <code>http://10.0.2.2:5000/api/v1</code>.
+              </p>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => setCustomApiUrl(customServerUrl)}
+                  className="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg"
+                >
+                  Save & Reload
+                </button>
+                <button
+                  onClick={() => { setCustomApiUrl(null); setCustomServerUrl(getApiUrl()); }}
+                  className="px-3 py-1.5 bg-gray-200 text-gray-800 text-xs font-semibold rounded-lg"
+                >
+                  Reset Default
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -213,7 +273,7 @@ export default function Home() {
       {/* Celebrations Section (Between Top Drinks and Combos) */}
       <section className="pt-4 pb-4 px-4">
         <div
-          className="rounded-[var(--gs-radius-2xl,1.5rem)] p-5 text-white shadow-lg relative overflow-hidden"
+          className="rounded(--gs-radius-2xl,1.5rem)] p-5 text-white shadow-lg relative overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, var(--gs-primary, #1B3A25) 0%, #2D5C3A 100%)',
             boxShadow: 'var(--gs-shadow-lg)',
@@ -234,7 +294,7 @@ export default function Home() {
           </p>
           <button
             onClick={() => navigate('/celebrations')}
-            className="px-5 py-2.5 rounded-[var(--gs-radius-lg,0.75rem)] text-sm font-bold transition-all active:scale-95 relative z-10 gs-focus-ring"
+            className="px-5 py-2.5 rounded(--gs-radius-lg,0.75rem)] text-sm font-bold transition-all active:scale-95 relative z-10 gs-focus-ring"
             style={{
               backgroundColor: 'var(--gs-secondary, #B58A63)',
               color: 'var(--gs-primary, #1B3A25)',

@@ -17,22 +17,10 @@ export default function MenuItemCard({ item }) {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!item.isAvailable) {
-      toast.error('Item is currently unavailable')
-      return
-    }
-
-    if (item.variants?.length > 0 || item.addons?.length > 0) {
-      toast.info('Please select options to add this item.')
-      openModal(item._id)
-      return
-    }
-
-    
     addItem({
       menuItemId: item._id,
       name: item.name,
-      price: item.basePrice,
+      price: item.discountedPrice ?? item.basePrice,
       quantity: 1,
       image: item.image?.url,
     })

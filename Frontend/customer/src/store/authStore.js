@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useCartStore } from './cartStore'
 import { clearAuthSession } from '@shared/auth'
+import { resetPushNotifications } from '@/utils/pushNotifications'
 
 export const useAuthStore = create(
   persist(
@@ -19,6 +20,7 @@ export const useAuthStore = create(
 
       logout: () => {
         clearAuthSession('customer')
+        resetPushNotifications()
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
         useCartStore.getState().clear()
       },

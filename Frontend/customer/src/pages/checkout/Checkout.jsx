@@ -233,13 +233,25 @@ export default function Checkout() {
     return closedDatesRes?.closedDates?.find(d => d.date === todayString)
   }, [closedDatesRes])
 
+  // Auto-select default or first address when savedAddresses loads
+  useEffect(() => {
+    if (isAuthenticated && savedAddresses?.length > 0 && !selectedAddressId) {
+      const defaultAddr = savedAddresses.find((a) => a.isDefault) || savedAddresses[0]
+      if (defaultAddr?._id) setSelectedAddressId(defaultAddr._id)
+    }
+  }, [isAuthenticated, savedAddresses, selectedAddressId])
+
+  const selectedAddressExists = useMemo(() => {
+    if (!isAuthenticated) return address.street.trim().length > 0
+    return !!savedAddresses?.some((a) => a._id === selectedAddressId)
+  }, [isAuthenticated, savedAddresses, selectedAddressId, address.street])
+
   const canSubmit =
     items.length > 0 &&
     !closedTodayInfo &&
     !maintenanceMode &&
     !outOfDeliveryRange &&
-    (deliveryType === 'pickup' ||
-      (isAuthenticated ? !!selectedAddressId : address.street.trim().length > 0)) &&
+    (deliveryType === 'pickup' || selectedAddressExists) &&
     (isAuthenticated || (guestInfo.name.trim().length > 0 && /^9[678]\d{8}$/.test(guestInfo.phone)))
 
   const handlePlaceOrder = async () => {
@@ -256,8 +268,13 @@ export default function Checkout() {
       if (deliveryType !== 'pickup') {
         if (isAuthenticated) {
           const selected = savedAddresses?.find((a) => a._id === selectedAddressId)
+          if (!selected) {
+            toast.error('Please select a delivery address')
+            setSubmitting(false)
+            return
+          }
           payload.deliveryAddress = {
-            type: selected?.coordinates ? 'gps' : 'manual',
+            type: selected.coordinates ? 'gps' : 'manual',
             street: selected.street,
             area: selected.area,
             city: selected.city,

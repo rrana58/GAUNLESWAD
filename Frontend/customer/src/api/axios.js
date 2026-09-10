@@ -1,7 +1,24 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/authStore'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'
+export const getApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('gs_api_url')
+    if (custom) return custom
+  }
+  return import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'
+}
+
+export const setCustomApiUrl = (url) => {
+  if (url && url.trim()) {
+    localStorage.setItem('gs_api_url', url.trim())
+  } else {
+    localStorage.removeItem('gs_api_url')
+  }
+  window.location.reload()
+}
+
+const API_URL = getApiUrl()
 
 const api = axios.create({
   baseURL: API_URL,

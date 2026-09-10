@@ -26,6 +26,12 @@ export default function MobileShell() {
     fetchSettings()
   }, [fetchSettings])
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      initPushNotifications(navigate)
+    }
+  }, [isAuthenticated, navigate])
+
   useLayoutEffect(() => {
     const el = footerRef.current
     if (!el) return

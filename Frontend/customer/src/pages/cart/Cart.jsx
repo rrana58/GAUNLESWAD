@@ -115,13 +115,6 @@ export default function Cart() {
                 <div className="flex-1 min-w-0">
                   <p className="font-display text-sm text-foreground truncate">{item.name}</p>
 
-                  {/* Variant + addons */}
-                  {(item.variantName || item.addonNames?.length > 0) && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {[item.variantName, ...(item.addonNames || [])].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-
                   {/* Special instructions */}
                   {item.specialInstructions && (
                     <p className="text-xs text-muted-foreground italic truncate">
