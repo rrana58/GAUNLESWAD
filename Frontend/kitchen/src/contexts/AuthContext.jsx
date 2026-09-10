@@ -6,6 +6,7 @@ import {
   clearAuthSession,
   getStoredUser,
 } from "@shared/auth";
+import { resetPushNotifications } from "../utils/pushNotifications";
 
 const AuthContext = createContext();
 const authService = createAuthService(api);
@@ -43,6 +44,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     clearAuthSession("kitchen");
+    resetPushNotifications();
     setUser(null);
   };
 

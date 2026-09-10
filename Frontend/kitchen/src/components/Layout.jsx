@@ -12,8 +12,10 @@ export default function Layout() {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    initPushNotifications(navigate);
-  }, [navigate]);
+    if (user) {
+      initPushNotifications(navigate);
+    }
+  }, [navigate, user]);
 
   const [soundEnabled, setSoundEnabled] = useState(() => {
     return localStorage.getItem("kitchen_sound") !== "off";

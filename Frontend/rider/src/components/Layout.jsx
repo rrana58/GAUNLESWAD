@@ -13,9 +13,11 @@ export default function Layout() {
   });
 
   useEffect(() => {
-    initPushNotifications(navigate);
+    if (user) {
+      initPushNotifications(navigate);
+    }
     requestRiderLocationPermission();
-  }, [navigate]);
+  }, [navigate, user]);
 
   useEffect(() => {
     window.__riderSoundEnabled = soundEnabled;
