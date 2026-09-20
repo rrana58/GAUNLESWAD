@@ -49,7 +49,7 @@ exports.setupTotp = catchAsync(async (req, res) => {
   await user.save({ validateBeforeSave: false });
 
   const otpauth = generateURI({
-    issuer: "GharkoSwad Admin",
+    issuer: "GaunleSwad Admin",
     label: user.phone,
     secret,
   });

@@ -258,7 +258,7 @@ cron.schedule("15 2 * * *", async () => {
       if (daysUntil !== closed.notifyDaysBefore) continue;
 
       const title = "Kitchen Closed Notice 🙏";
-      const body = `Gharko Swad will be closed on ${closed.date} for ${closed.reason}. Please plan your orders accordingly.`;
+      const body = `GaunleSwad will be closed on ${closed.date} for ${closed.reason}. Please plan your orders accordingly.`;
 
       const users = await User.find(
         { isActive: true, "fcmTokens.0": { $exists: true } },

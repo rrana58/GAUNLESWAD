@@ -1,7 +1,7 @@
 {
   "name": "gharko-swad-backend",
   "version": "1.0.0",
-  "description": "Gharko Swad — Cloud Kitchen Food Delivery Backend",
+  "description": "GaunleSwad — Cloud Kitchen Food Delivery Backend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

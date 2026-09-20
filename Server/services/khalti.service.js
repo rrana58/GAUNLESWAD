@@ -23,7 +23,7 @@ const initiateKhaltiPayment = async ({ orderId, orderNumber, amount, customerNam
       website_url: process.env.WEB_URL || "http://localhost:3000",
       amount: amount * 100, // Khalti uses paisa (1 Rs = 100 paisa)
       purchase_order_id: orderId,
-      purchase_order_name: `Gharko Swad - ${orderNumber}`,
+      purchase_order_name: `GaunleSwad - ${orderNumber}`,
       customer_info: {
         name: customerName,
         email: customerEmail,

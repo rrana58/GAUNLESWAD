@@ -1,4 +1,4 @@
-# Gharko Swad — Backend API
+# GaunleSwad — Backend API
 
 Cloud kitchen food delivery platform for Nepal.
 

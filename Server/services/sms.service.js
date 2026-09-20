@@ -9,7 +9,7 @@ const sendSMS = async (to, message) => {
     const response = await axios.get(SPARROW_BASE_URL, {
       params: {
         token: process.env.SPARROW_SMS_TOKEN,
-        from: process.env.SPARROW_SMS_FROM || "GharkoSwad",
+        from: process.env.SPARROW_SMS_FROM || "GaunleSwad",
         to,
         text: message,
       },
@@ -30,7 +30,7 @@ const sendSMS = async (to, message) => {
 };
 
 const sendOTP = async (phone, otp) => {
-  const message = `Your Gharko Swad verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
+  const message = `Your GaunleSwad verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
   return sendSMS(phone, message);
 };
 

@@ -33,7 +33,7 @@ async function startServer() {
   require("./jobs/queues");
 
   server.listen(PORT, () => {
-    logger.info(`🚀 Gharko Swad API on port ${PORT} [${process.env.NODE_ENV}]`);
+    logger.info(`🚀 GaunleSwad API on port ${PORT} [${process.env.NODE_ENV}]`);
   });
 
   const shutdown = (signal) => {

@@ -1,4 +1,4 @@
-# Security Architecture — Gharko Swad Backend
+# Security Architecture — GaunleSwad Backend
 
 ## What's Protected and How
 

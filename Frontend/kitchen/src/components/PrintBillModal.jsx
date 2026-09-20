@@ -201,8 +201,8 @@ export default function PrintBillModal({ order, onClose }) {
 
           <div class="divider"></div>
           <div class="footer">
-            <div>Thank you for choosing Gaunle Swad!</div>
-            <div>Powered by Gharko Swad Platform</div>
+            <div>Thank you for choosing GaunleSwad!</div>
+            <div>Powered by GaunleSwad Platform</div>
             <div style="margin-top:4px;font-size:9px;">Order ID: ${order._id}</div>
           </div>
         </body>
@@ -477,8 +477,8 @@ export default function PrintBillModal({ order, onClose }) {
                 <div className="border-t border-dashed border-border my-3" />
 
                 <div className="text-center text-[11px] text-muted-foreground/60 space-y-0.5">
-                  <p className="font-semibold text-muted-foreground">Thank you for choosing Gaunle Swad!</p>
-                  <p>Powered by Gharko Swad Platform</p>
+                  <p className="font-semibold text-muted-foreground">Thank you for choosing GaunleSwad!</p>
+                  <p>Powered by GaunleSwad Platform</p>
                   <p className="text-[9px] mt-1 text-muted-foreground/30 break-all">ID: {order._id}</p>
                 </div>
               </div>

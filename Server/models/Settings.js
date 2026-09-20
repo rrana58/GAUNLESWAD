@@ -74,7 +74,7 @@ const settingsSchema = new mongoose.Schema(
       trim: true,
       maxlength: 3000,
       default:
-        "Gharko Swad brings home-style Nepali thalis and momo straight to your doorstep — cooked fresh, every day.",
+        "GaunleSwad brings home-style Nepali thalis and momo straight to your doorstep — cooked fresh, every day.",
     },
     // ─── Promotional Popup ────────────────────────────────────────────────────────
     popup: {

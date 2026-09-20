@@ -239,7 +239,7 @@ export default function UnifiedLoginPage({ api, onAuthSuccess, currentUser }) {
                 fontFamily: "'Fraunces Variable', 'Fraunces', Georgia, serif",
               }}
             >
-              Gharko Swaad
+              GaunleSwad
             </h1>
             <p
               className="text-xs uppercase tracking-[0.2em] mt-2 font-medium"
