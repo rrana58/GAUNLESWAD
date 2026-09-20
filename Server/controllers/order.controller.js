@@ -336,7 +336,20 @@ const calculateOrderTotals = async (cartItems, couponCode, userId, useWallet, db
   const totalAmount = Math.round(Math.max(0, subtotal + deliveryFee - couponDiscount - walletDiscount) * 100) / 100;
   const taxAmount = Math.round((subtotal - (subtotal / 1.13)) * 100) / 100;
 
-  return { orderItems, subtotal, taxAmount, deliveryFee, deliveryDistanceKm, couponDiscount, walletDiscount, totalAmount, appliedCoupon, mealClaimsMeta, activeSession };
+  return {
+   orderItems,
+   subtotal,
+   taxAmount,
+   deliveryFee,
+   deliveryDistanceKm,
+   couponDiscount,
+   walletDiscount,
+   totalAmount,
+   appliedCoupon,
+   mealClaimsMeta,
+   activeSession,
+   menuItems,
+};
 };
 
 // ─── Place Order (wrapped in MongoDB transaction) ─────────────────────────────
@@ -382,9 +395,19 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
         items, couponCode, userId, useWallet, dbSession, deliveryType, deliveryAddress,
         req.user?.fcmTokens  // pass for low-meal-plan push notification
       );
-      const { orderItems, subtotal, taxAmount, deliveryFee, deliveryDistanceKm, couponDiscount, walletDiscount, totalAmount,
-        appliedCoupon, activeSession } = calcResult;
-      
+      const {
+        orderItems,
+        subtotal,
+        taxAmount,
+        deliveryFee,
+        deliveryDistanceKm,
+        couponDiscount,
+        walletDiscount,
+        totalAmount,
+        appliedCoupon,
+        activeSession,
+        menuItems,
+      } = calcResult;
       // Store reference to outer block variable
       mealClaimsMeta = calcResult.mealClaimsMeta || [];
 
