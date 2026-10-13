@@ -1,4 +1,4 @@
-﻿export function isCapacitorNative() {
+export function isCapacitorNative() {
   if (typeof window !== 'undefined' && window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
     return window.Capacitor.isNativePlatform();
   }
@@ -46,6 +46,7 @@ export function getRoleRedirectUrl(role) {
       if (window.location.hostname === 'gaunleswad-admin.onrender.com') return '/';
       return '/admin/';
     case 'kitchen':
+      if (window.location.hostname === 'gaunleswad-kitchen.onrender.com') return '/';
       return '/kitchen/';
     case 'delivery':
     case 'rider':
