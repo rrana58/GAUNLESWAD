@@ -1,4 +1,4 @@
-export function isCapacitorNative() {
+﻿export function isCapacitorNative() {
   if (typeof window !== 'undefined' && window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
     return window.Capacitor.isNativePlatform();
   }
@@ -43,6 +43,7 @@ export function getRoleRedirectUrl(role) {
   // Production single-origin routing (Express serving /admin, /kitchen, /rider, /)
   switch (normalizedRole) {
     case 'admin':
+      if (window.location.hostname === 'gaunleswad-admin.onrender.com') return '/';
       return '/admin/';
     case 'kitchen':
       return '/kitchen/';
@@ -54,4 +55,5 @@ export function getRoleRedirectUrl(role) {
       return '/';
   }
 }
+
 
