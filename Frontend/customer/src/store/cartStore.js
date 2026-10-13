@@ -4,7 +4,7 @@ import api from '@/api/axios'
 
 
 function lineKey(item) {
-  return [item.menuItemId, item.specialInstructions || ''].join('|')
+  return [item.menuItemId, item.variantId || '', item.specialInstructions || ''].join('|')
 }
 
 // Helper to notify backend (fire and forget)

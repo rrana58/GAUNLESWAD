@@ -8,8 +8,20 @@ import { useNavigate } from 'react-router-dom'
 
 export default function MenuItemCard({ item }) {
   const navigate = useNavigate()
-  const price = item.discountedPrice ?? item.basePrice
-  const hasDiscount = item.discountedPrice != null && item.discountedPrice < item.originalPrice
+  const discountedVariants = (item.variants || [])
+    .filter((variant) => variant.isAvailable !== false && variant.discountedPrice != null)
+  const lowestDiscountedVariant = discountedVariants.length
+    ? discountedVariants.reduce((lowest, variant) =>
+        variant.discountedPrice < lowest.discountedPrice ? variant : lowest
+      )
+    : null
+
+  const price = item.discountedPrice ?? lowestDiscountedVariant?.discountedPrice ?? item.basePrice
+  const hasBaseDiscount = item.discountedPrice != null && item.discountedPrice < item.originalPrice
+  const hasVariantDiscount = discountedVariants.some(
+    (variant) => variant.discountedPrice < variant.price
+  )
+  const hasDiscount = hasBaseDiscount || hasVariantDiscount
   const openModal = useItemModalStore(s => s.openModal)
   const addItem = useCartStore(s => s.addItem)
 
@@ -32,7 +44,17 @@ export default function MenuItemCard({ item }) {
     })
   }
 
-  const handleCardActivate = () => openModal(item._id)
+  const handleCardActivate = () => {
+    console.log('[Special Session Item]', {
+      name: item.name,
+      originalPrice: item.originalPrice,
+      discountedPrice: item.discountedPrice,
+      variantDetails: (item.variants || []).map((v) =>
+        `${v.name}: price=${v.price}, originalPrice=${v.originalPrice}, discountedPrice=${v.discountedPrice}`
+      ),
+    })
+    openModal(item._id, item)
+  }
 
   const handleCardKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ' ') {

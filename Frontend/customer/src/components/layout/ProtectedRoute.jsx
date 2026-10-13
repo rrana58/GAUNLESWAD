@@ -32,6 +32,14 @@ export default function ProtectedRoute() {
   const hydrated = useAuthHydrated()
   const location = useLocation()
 
+  console.log('[ProtectedRoute]', {
+    pathname: location.pathname,
+    hydrated,
+    isAuthenticated,
+    hasUser:!!user,
+  })
+
+
   if (!hydrated) {
     return null
   }

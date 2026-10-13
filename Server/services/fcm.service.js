@@ -1,4 +1,5 @@
 const admin = require("firebase-admin");
+const { cert } = require("firebase-admin/app");
 const logger = require("../utils/logger");
 
 let firebaseApp;
@@ -12,7 +13,7 @@ const initFirebase = () => {
   }
 
   firebaseApp = admin.initializeApp({
-    credential: admin.credential.cert({
+    credential: cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -35,7 +36,7 @@ const sendPushNotification = async (fcmToken, title, body, data = {}) => {
       token: fcmToken,
       notification: { title, body },
       data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
-      android: { 
+      android: {
         priority: "high",
         notification: { sound: "default" }
       },

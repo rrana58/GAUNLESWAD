@@ -1,62 +1,86 @@
-const router = require("express").Router();
+﻿const router = require("express").Router();
 const { body } = require("express-validator");
 const paymentController = require("../controllers/payment.controller");
-const { protect } = require("../middleware/auth");
+const { protect, optionalAuth, restrictTo } = require("../middleware/auth");
 const { allowFields, validateObjectId } = require("../middleware/sanitize");
 const validate = require("../middleware/validate");
 
-// All payment routes require auth
-router.use(protect);
+// ---------------------------------------------------------
+// Guest-capable payment flow
+// optionalAuth allows both logged-in users and guests.
+// ---------------------------------------------------------
 
-// Khalti
+// Khalti - Initiate
 router.post(
   "/khalti/initiate",
-  allowFields("orderId"),
+  optionalAuth,
+  allowFields("orderId", "trackingToken"),
   [body("orderId").isMongoId().withMessage("Invalid order ID")],
   validate,
   paymentController.initiateKhalti
 );
 
-// Verify (called after gateway redirect — token already validated via protect)
+// Khalti - Verify
 router.post(
   "/khalti/verify",
+  optionalAuth,
   allowFields("pidx"),
-  [body("pidx").isString().isLength({ min: 1, max: 200 }).withMessage("Invalid pidx")],
+  [
+    body("pidx")
+      .isString()
+      .isLength({ min: 1, max: 200 })
+      .withMessage("Invalid pidx"),
+  ],
   validate,
   paymentController.verifyKhalti
 );
 
-// eSewa
+// eSewa - Payment data
 router.post(
   "/esewa/data",
-  allowFields("orderId"),
+  optionalAuth,
+  allowFields("orderId", "trackingToken"),
   [body("orderId").isMongoId().withMessage("Invalid order ID")],
   validate,
   paymentController.getEsewaData
 );
 
+// eSewa - Verify
 router.post(
   "/esewa/verify",
-  allowFields("data", "orderId"),
+  optionalAuth,
+  allowFields("data"),
   [
-    body("data").isString().isLength({ min: 1, max: 2000 }).withMessage("Invalid payment data"),
-    body("orderId").isMongoId().withMessage("Invalid order ID"),
+    body("data")
+      .isString()
+      .isLength({ min: 1, max: 2000 })
+      .withMessage("Invalid payment data"),
   ],
   validate,
   paymentController.verifyEsewa
 );
 
+// ---------------------------------------------------------
+// Protected payment-management routes
+// These still require authentication.
+// ---------------------------------------------------------
+
+// Get payment record
 router.get(
   "/order/:orderId",
+  protect,
   validateObjectId("orderId"),
   paymentController.getOrderPayment
 );
 
-// ─── Refunds (admin only) ─────────────────────────────────────────────────────
-const { restrictTo } = require("../middleware/auth");
+// ---------------------------------------------------------
+// Refunds - Admin only
+// protect must run before restrictTo so req.user exists.
+// ---------------------------------------------------------
 
 router.post(
   "/khalti/refund",
+  protect,
   restrictTo("admin"),
   allowFields("orderId", "reason"),
   [body("orderId").isMongoId().withMessage("Invalid order ID")],
@@ -66,6 +90,7 @@ router.post(
 
 router.post(
   "/esewa/refund",
+  protect,
   restrictTo("admin"),
   allowFields("orderId", "reason"),
   [body("orderId").isMongoId().withMessage("Invalid order ID")],

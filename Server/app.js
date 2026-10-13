@@ -27,6 +27,7 @@ const subscriptionRoutes = require("./routes/subscription.routes");
 const addressRoutes = require("./routes/address.routes");
 const announcementRoutes = require("./routes/announcement.routes");
 const jobRoutes = require("./routes/job.routes");
+const problemReportRoutes = require("./routes/problemReport.routes");
 const couponRoutes = require("./routes/coupon.routes");
 const errorHandler = require("./middleware/errorHandler");
 const { requestLogger, securityLogger } = require("./utils/logger");
@@ -226,6 +227,7 @@ app.use("/api/v1/addresses", addressRoutes);
 app.use("/api/v1/settings", require("./routes/settings.routes")); // <--- NEW route added here
 app.use("/api/v1/announcements", announcementRoutes);
 app.use("/api/v1/jobs", jobRoutes);
+app.use("/api/v1/problem-reports", problemReportRoutes);
 app.use("/api/v1/coupons", couponRoutes);
 // ── 15. Serve frontend builds (production single-server deployment) ──────────
 const path = require("path");

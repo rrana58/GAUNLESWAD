@@ -9,26 +9,48 @@ const catchAsync = require("../utils/catchAsync");
 const { paymentLogger, securityLogger } = require("../utils/logger");
 
 // ─── Verify order belongs to the requesting user ──────────────────────────────
-const assertOrderOwnership = (order, req) => {
+const assertOrderOwnership = (order, req, trackingToken) => {
   if (!order) throw new AppError("Order not found.", 404);
-  if (order.paymentStatus === "paid") throw new AppError("Order is already paid.", 400);
+  if (order.paymentStatus === "paid") {
+    throw new AppError("Order is already paid.", 400);
+  }
 
-  // Ownership check: customer can only pay their own orders
-  if (req.user && order.customer) {
-    const customerId = order.customer._id?.toString() || order.customer.toString();
-    if (customerId !== req.user._id.toString() && req.user.role !== "admin") {
-      securityLogger.warn(`Payment ownership violation: user ${req.user._id} tried order ${order._id}`);
-      throw new AppError("Access denied.", 403);
+  // Logged-in user: existing ownership check
+  if (req.user) {
+    if (order.customer) {
+      const customerId = order.customer._id?.toString() || order.customer.toString();
+
+      if (customerId !== req.user._id.toString() && req.user.role !== "admin") {
+        securityLogger.warn(
+          `Payment ownership violation: user ${req.user._id} tried order ${order._id}`
+        );
+        throw new AppError("Access denied.", 403);
+      }
     }
+
+    return;
+  }
+
+  // Guest: tracking token must match the order
+  if (!trackingToken || trackingToken !== order.trackingToken) {
+    securityLogger.warn(
+      `Guest payment authorization failed for order ${order._id}`
+    );
+    throw new AppError("Access denied.", 403);
+  }
+
+  // Guests may only pay guest orders
+  if (order.customer) {
+    throw new AppError("Access denied.", 403);
   }
 };
 
 // ─── Initiate Khalti ──────────────────────────────────────────────────────────
 exports.initiateKhalti = catchAsync(async (req, res, next) => {
-  const { orderId } = req.body;
+  const { orderId, trackingToken } = req.body;
 
   const order = await Order.findById(orderId).populate("customer", "name phone email");
-  assertOrderOwnership(order, req);
+  assertOrderOwnership(order, req, trackingToken);
 
   if (order.paymentMethod !== "khalti") {
     throw new AppError("This order is not set to Khalti payment.", 400);
@@ -81,6 +103,27 @@ exports.verifyKhalti = catchAsync(async (req, res, next) => {
   const payment = await Payment.findOne({ pidx }).populate("order");
   if (!payment) throw new AppError("Payment record not found.", 404);
 
+  const order = payment.order;
+
+  // Logged-in user: preserve ownership protection.
+  // Guest: payment must belong to a guest order.
+  if (req.user) {
+    if (
+      req.user.role !== "admin" &&
+      order.customer?.toString() !== req.user._id.toString()
+    ) {
+      securityLogger.warn(
+        `Khalti payment ownership violation: user ${req.user._id} tried order ${order._id}`
+      );
+      throw new AppError("Access denied.", 403);
+    }
+  } else if (order.customer) {
+    securityLogger.warn(
+      `Guest Khalti payment attempted for authenticated order ${order._id}`
+    );
+    throw new AppError("Access denied.", 403);
+  }
+
   // Idempotency — already verified
   if (payment.status === "completed") {
     return sendSuccess(res, { order: payment.order }, "Payment already confirmed.");
@@ -115,7 +158,6 @@ exports.verifyKhalti = catchAsync(async (req, res, next) => {
   payment.gatewayResponse = result.raw;
   await payment.save();
 
-  const order = payment.order;
   order.paymentStatus = "paid";
   order.paymentReference = result.transactionId;
   order.paidAt = new Date();
@@ -130,10 +172,10 @@ exports.verifyKhalti = catchAsync(async (req, res, next) => {
 
 // ─── eSewa payment data ───────────────────────────────────────────────────────
 exports.getEsewaData = catchAsync(async (req, res, next) => {
-  const { orderId } = req.body;
+  const { orderId, trackingToken } = req.body;
 
   const order = await Order.findById(orderId);
-  assertOrderOwnership(order, req);
+  assertOrderOwnership(order, req, trackingToken);
 
   if (order.paymentMethod !== "esewa") {
     throw new AppError("This order is not set to eSewa payment.", 400);
@@ -142,51 +184,96 @@ exports.getEsewaData = catchAsync(async (req, res, next) => {
   const esewaData = getEsewaPaymentData({ orderId: order._id, amount: order.totalAmount });
 
   await Payment.findOneAndUpdate(
-    { order: order._id, method: "esewa", status: { $in: ["initiated"] } },
-    { $setOnInsert: { order: order._id, amount: order.totalAmount, method: "esewa", status: "initiated" } },
-    { upsert: true }
-  );
-
+  { order: order._id, method: "esewa", status: { $in: ["initiated", "pending"] } },
+  {
+    $set: {
+      amount: order.totalAmount,
+      transactionUuid: esewaData.transaction_uuid,
+      status: "initiated",
+      initiatedAt: new Date(),
+    },
+    $setOnInsert: {
+      order: order._id,
+      method: "esewa",
+    },
+  },
+  { upsert: true, new: true }
+);
   paymentLogger.info(`eSewa data requested: order=${order.orderNumber}`);
   sendSuccess(res, { esewaData }, "eSewa payment data ready");
 });
 
 // ─── Verify eSewa ─────────────────────────────────────────────────────────────
 exports.verifyEsewa = catchAsync(async (req, res, next) => {
-  const { data: encodedData, orderId } = req.body;
+  const { data: encodedData } = req.body;
 
   if (!encodedData || typeof encodedData !== "string" || encodedData.length > 2000) {
     throw new AppError("Invalid payment data.", 400);
   }
 
   const result = await verifyEsewaPayment(encodedData);
-  if (!result.success) throw new AppError(result.error || "Payment verification failed.", 400);
+  if (!result.success) {
+    throw new AppError(result.error || "Payment verification failed.", 400);
+  }
 
-  const order = await Order.findById(orderId);
-  if (!order) throw new AppError("Order not found.", 404);
+  // Find the payment using the transaction UUID verified by eSewa.
+  // Never trust an orderId supplied by the browser.
+  const payment = await Payment.findOne({
+    method: "esewa",
+    transactionUuid: result.transactionUuid,
+    status: { $in: ["initiated", "pending"] },
+  }).populate("order");
+
+  if (!payment || !payment.order) {
+    securityLogger.warn(
+      `eSewa payment record not found for transaction UUID ${result.transactionUuid}`
+    );
+    throw new AppError("Payment record not found.", 404);
+  }
+
+  const order = payment.order;
+
+  // Logged-in user: preserve ownership protection.
+  // Guest: only guest orders may be verified without authentication.
+  if (req.user) {
+    if (
+      req.user.role !== "admin" &&
+      order.customer?.toString() !== req.user._id.toString()
+    ) {
+      securityLogger.warn(
+        `eSewa payment ownership violation: user ${req.user._id} tried order ${order._id}`
+      );
+      throw new AppError("Access denied.", 403);
+    }
+  } else if (order.customer) {
+    securityLogger.warn(
+      `Guest eSewa payment attempted for authenticated order ${order._id}`
+    );
+    throw new AppError("Access denied.", 403);
+  }
+
   if (order.paymentStatus === "paid") {
     return sendSuccess(res, { order }, "Payment already confirmed.");
   }
 
   // Amount check
   const paidAmount = parseFloat(result.amount);
-  if (Math.abs(paidAmount - order.totalAmount) > 0.01) {
+  if (
+    !Number.isFinite(paidAmount) ||
+    Math.abs(paidAmount - order.totalAmount) > 0.01
+  ) {
     securityLogger.warn(
       `eSewa amount mismatch: expected Rs.${order.totalAmount}, got Rs.${paidAmount} for order ${order._id}`
     );
     throw new AppError("Payment amount mismatch. Contact support.", 400);
   }
 
-  await Payment.findOneAndUpdate(
-    { order: order._id, method: "esewa" },
-    {
-      status: "completed",
-      completedAt: new Date(),
-      refId: result.transactionId,
-      gatewayTransactionId: result.transactionId,
-      gatewayResponse: result.raw,
-    }
-  );
+  payment.status = "completed";
+  payment.completedAt = new Date();
+  payment.refId = result.transactionId;
+  payment.gatewayTransactionId = result.transactionId;
+  payment.gatewayResponse = result.raw;
+  await payment.save();
 
   order.paymentStatus = "paid";
   order.paymentReference = result.transactionId;
@@ -195,12 +282,12 @@ exports.verifyEsewa = catchAsync(async (req, res, next) => {
   await order.save();
 
   emitOrderUpdate(order);
-  paymentLogger.info(`eSewa verified: order=${order.orderNumber} txn=${result.transactionId}`);
+  paymentLogger.info(
+    `eSewa verified: order=${order.orderNumber} txn=${result.transactionId}`
+  );
 
   sendSuccess(res, { order }, "eSewa payment confirmed!");
 });
-
-// ─── Get payment record ───────────────────────────────────────────────────────
 exports.getOrderPayment = catchAsync(async (req, res, next) => {
   const order = await Order.findById(req.params.orderId);
   if (!order) throw new AppError("Order not found.", 404);

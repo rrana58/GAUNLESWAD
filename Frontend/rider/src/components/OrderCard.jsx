@@ -1,8 +1,37 @@
 import { format } from "date-fns";
 import { MapPin, Phone, CheckCircle, Navigation } from "lucide-react";
+import RiderRouteMap from "./RiderRouteMap";
+import { getCurrentRiderLocation } from "../utils/riderLocation";
 
 export default function OrderCard({ order, onStatusChange }) {
   const address = order.deliveryAddress;
+
+  const handleStartNavigation = async () => {
+    const destination = order?.deliveryAddress?.coordinates;
+
+    if (!destination?.lat || !destination?.lng) {
+      return;
+    }
+
+    try {
+      const rider = await getCurrentRiderLocation();
+
+      const url =
+        `https://www.google.com/maps/dir/?api=1` +
+        `&origin=${rider.lat},${rider.lng}` +
+        `&destination=${destination.lat},${destination.lng}` +
+        `&travelmode=driving`;
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      const url =
+        `https://www.google.com/maps/dir/?api=1` +
+        `&destination=${destination.lat},${destination.lng}` +
+        `&travelmode=driving`;
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
   const isSubscription = order.orderType === "subscription";
 
   return (
@@ -56,7 +85,21 @@ export default function OrderCard({ order, onStatusChange }) {
         </div>
       </div>
 
+      {order.status === "out_for_delivery" && <RiderRouteMap order={order} />}
+
       <div className="flex gap-2 pt-2">
+        {order.status === "out_for_delivery" && (
+          <button
+            type="button"
+            onClick={handleStartNavigation}
+            disabled={!order?.deliveryAddress?.coordinates?.lat || !order?.deliveryAddress?.coordinates?.lng}
+            className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm shadow-sm shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <Navigation size={18} />
+            Start Navigation
+          </button>
+        )}
+
         {order.status === "ready" && (
           <button
             onClick={() => onStatusChange(order._id, "out_for_delivery")}
@@ -66,7 +109,7 @@ export default function OrderCard({ order, onStatusChange }) {
             Pick Up Order
           </button>
         )}
-        
+
         {order.status === "out_for_delivery" && (
           <button
             onClick={() => onStatusChange(order._id, "delivered")}

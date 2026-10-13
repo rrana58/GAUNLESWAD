@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ordersApi } from '@/api/orders'
 import { useActiveOrderStore } from '@/store/activeOrderStore'
 import { useAuthStore } from '@/store/authStore'
 import { connectSocket } from '@/lib/socket'
 
-
 const isMongoId = (v) => /^[0-9a-f]{24}$/.test(v)
+
 const TERMINAL = ['delivered', 'cancelled', 'refunded']
+
 const LABELS = {
   pending: 'Order placed',
   confirmed: 'Confirmed',
@@ -18,90 +19,177 @@ const LABELS = {
 
 export default function ActiveOrderBar() {
   const location = useLocation()
-  const ref = useActiveOrderStore((s) => s.ref)
+
+  const refs = useActiveOrderStore((s) => s.refs)
+  const currentIndex = useActiveOrderStore((s) => s.currentIndex)
   const setActiveOrder = useActiveOrderStore((s) => s.setActiveOrder)
-  const clearActiveOrder = useActiveOrderStore((s) => s.clearActiveOrder)
+  const removeOrder = useActiveOrderStore((s) => s.removeOrder)
+  const nextOrder = useActiveOrderStore((s) => s.nextOrder)
+  const previousOrder = useActiveOrderStore((s) => s.previousOrder)
+
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+
+  const currentRef = refs[currentIndex] || null
   const [order, setOrder] = useState(null)
 
   useEffect(() => {
-    if (ref || !isAuthenticated) return
+    if (refs.length > 0 || !isAuthenticated) return
+
     ordersApi
-      .getMyOrders({ page: 1, limit: 5 })
+      .getMyOrders({ page: 1, limit: 20 })
       .then(({ data }) => {
-        const active = data.orders?.find((o) => !TERMINAL.includes(o.status))
-        if (active) setActiveOrder(active._id)
+        const activeOrders = (data.orders || [])
+          .filter((item) => !TERMINAL.includes(item.status))
+          .map((item) => item._id)
+          .reverse()
+
+        activeOrders.forEach((ref) => setActiveOrder(ref))
       })
       .catch(() => {})
-  }, [ref, isAuthenticated, setActiveOrder])
+  }, [refs.length, isAuthenticated, setActiveOrder])
 
-  const fetchOrder = useCallback(async () => {
-    if (!ref) {
-      setOrder(null)
-      return
-    }
-    try {
-      const { data } = isMongoId(ref)
-        ? await ordersApi.getOrder(ref)
-        : await ordersApi.trackByToken(ref)
-      if (TERMINAL.includes(data.order.status)) {
-        clearActiveOrder()
-        setOrder(null)
-      } else {
-        setOrder(data.order)
+  useEffect(() => {
+    let cancelled = false
+
+    if (!currentRef) {
+      return () => {
+        cancelled = true
       }
-    } catch {
-      clearActiveOrder()
-      setOrder(null)
     }
-  }, [ref, clearActiveOrder])
+
+    const loadOrder = async () => {
+      try {
+        const { data } = isMongoId(currentRef)
+          ? await ordersApi.getOrder(currentRef)
+          : await ordersApi.trackByToken(currentRef)
+
+        if (cancelled) return
+
+        if (TERMINAL.includes(data.order.status)) {
+          removeOrder(currentRef)
+          setOrder(null)
+        } else {
+          setOrder(data.order)
+        }
+      } catch {
+        if (cancelled) return
+
+        removeOrder(currentRef)
+        setOrder(null)
+      }
+    }
+
+    loadOrder()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentRef, removeOrder])
 
   useEffect(() => {
-    fetchOrder()
-  }, [fetchOrder])
-
-  useEffect(() => {
-    if (!order?._id) return
     const socket = connectSocket()
-    socket.emit('join:order', order._id)
+
+    refs.forEach((ref) => {
+      if (isMongoId(ref)) {
+        socket.emit('join:order', ref)
+      }
+    })
 
     const handleUpdate = (updated) => {
-      if (updated._id !== order._id) return
+      if (!updated?._id) return
+
+      const ref = updated._id
+
+      if (!refs.includes(ref)) return
+
       if (TERMINAL.includes(updated.status)) {
-        clearActiveOrder()
-        setOrder(null)
-      } else {
+        removeOrder(ref)
+
+        if (ref === currentRef) {
+          setOrder(null)
+        }
+
+        return
+      }
+
+      if (ref === currentRef) {
         setOrder((prev) => ({ ...prev, ...updated }))
       }
     }
 
     socket.on('order:updated', handleUpdate)
-    return () => socket.off('order:updated', handleUpdate)
-  }, [order?._id, clearActiveOrder])
 
-  if (!order) return null
-  if (location.pathname === `/track/${ref}`) return null
+    return () => {
+      socket.off('order:updated', handleUpdate)
+    }
+  }, [refs, currentRef, removeOrder])
+
+  if (!order || !currentRef) return null
+
+  if (location.pathname === `/track/${currentRef}`) return null
+
+  const hasMultipleOrders = refs.length > 1
 
   return (
-    <Link
-      to={`/track/${ref}`}
-      aria-label={`Order #${order.orderNumber} is ${LABELS[order.status] || order.status}. Tap to track.`}
-      className="flex items-center justify-between gap-3 border-t border-border bg-primary/5 px-4 py-2.5 active:bg-primary/10 gs-focus-ring"
-    >
-      <div className="flex items-center gap-2.5 min-w-0">
-        {/* Live ping dot */}
-        <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-foreground truncate">
-            Order #{order.orderNumber} · {LABELS[order.status] || order.status}
-          </p>
-          <p className="text-[11px] text-muted-foreground">Tap to track</p>
+    <div className="flex items-center border-t border-border bg-primary/5">
+      {hasMultipleOrders && (
+        <button
+          type="button"
+          onClick={previousOrder}
+          aria-label="Previous active order"
+          className="px-2.5 py-2.5 text-sm text-muted-foreground hover:text-foreground gs-focus-ring"
+        >
+          ‹
+        </button>
+      )}
+
+      <Link
+        to={`/track/${currentRef}`}
+        aria-label={`Order #${order.orderNumber} is ${
+          LABELS[order.status] || order.status
+        }. Tap to track.`}
+        className="flex min-w-0 flex-1 items-center justify-between gap-3 px-2 py-2.5 active:bg-primary/10 gs-focus-ring"
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className="relative flex h-2 w-2 shrink-0"
+            aria-hidden="true"
+          >
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          </span>
+
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-foreground">
+              Order #{order.orderNumber} ·{' '}
+              {LABELS[order.status] || order.status}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {hasMultipleOrders
+                ? `${currentIndex + 1} of ${refs.length} · Tap to track`
+                : 'Tap to track'}
+            </p>
+          </div>
         </div>
-      </div>
-      <span className="text-xs font-medium text-primary shrink-0" aria-hidden="true">Track →</span>
-    </Link>
+
+        <span
+          className="shrink-0 text-xs font-medium text-primary"
+          aria-hidden="true"
+        >
+          Track ?
+        </span>
+      </Link>
+
+      {hasMultipleOrders && (
+        <button
+          type="button"
+          onClick={nextOrder}
+          aria-label="Next active order"
+          className="px-2.5 py-2.5 text-sm text-muted-foreground hover:text-foreground gs-focus-ring"
+        >
+          ›
+        </button>
+      )}
+    </div>
   )
 }

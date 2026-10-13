@@ -1,14 +1,15 @@
 import { useState, useId } from 'react'
 import { useForm } from 'react-hook-form'
+import { useSearchParams } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   ChevronRight, ChevronDown, Megaphone, Ticket, Briefcase, Phone, Info,
   Copy, MapPin, Mail, MessageCircle, Globe, CheckCircle2, FileText, ShieldCheck,
 } from 'lucide-react'
-import { announcementApi, jobApi, promoApi, settingsApi } from '@/api/orders'
+import { announcementApi, jobApi, ordersApi, problemReportApi, promoApi, settingsApi } from '@/api/orders'
 import { useAuthStore } from '@/store/authStore'
 import { getErrorMessage } from '@/lib/errorMessage'
 import { formatNpr, cn } from '@/lib/utils'
@@ -16,7 +17,8 @@ import PageHeader from '@/components/layout/PageHeader'
 
 
 export default function More() {
-  const [view, setView] = useState('hub')
+  const [searchParams] = useSearchParams()
+  const [view, setView] = useState(() => searchParams.get('view') || 'hub')
 
   const titles = {
     hub: 'More',
@@ -264,6 +266,12 @@ const applySchema = z.object({
   message: z.string().max(1000).optional().or(z.literal('')),
 })
 
+const problemReportSchema = z.object({
+  problemType: z.enum(['order', 'payment', 'delivery', 'food_menu', 'technical', 'other']),
+  order: z.string().optional().or(z.literal('')),
+  description: z.string().min(10, 'Please describe the problem').max(2000),
+})
+
 function JobsView() {
   const [applyingTo, setApplyingTo] = useState(null)
   const { data, isLoading } = useQuery({
@@ -272,6 +280,18 @@ function JobsView() {
   })
 
   const jobs = data || []
+  const { user } = useAuthStore()
+
+  const { data: myApplicationsData } = useQuery({
+    queryKey: ['jobs', 'my-applications'],
+    queryFn: () => jobApi.getMyApplications().then((r) => r.data.applications),
+    enabled: !!user,
+  })
+
+  const myApplications = myApplicationsData || []
+  const applicationByJob = new Map(
+    myApplications.map((application) => [String(application.job), application])
+  )
 
   if (applyingTo) {
     return <JobApplyForm job={applyingTo} onDone={() => setApplyingTo(null)} />
@@ -308,15 +328,39 @@ function JobsView() {
                   <MapPin size={10} aria-hidden="true" /> {j.location}
                 </p>
               )}
-              <button
-                type="button"
-                onClick={() => setApplyingTo(j)}
-                aria-label={`Apply for ${j.title}`}
-                className="mt-3 w-full bg-primary text-primary-foreground py-2.5 text-sm font-semibold active:scale-[0.98] transition-transform gs-focus-ring"
-                style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
-              >
-                Apply Now
-              </button>
+              {(() => {
+                const application = applicationByJob.get(String(j._id))
+
+                if (application) {
+                  const statusLabels = {
+                    new: 'Application Submitted',
+                    reviewed: 'Application Reviewed',
+                    contacted: "We've Contacted You",
+                    rejected: 'Position Filled',
+                  }
+
+                  return (
+                    <div
+                      className="mt-3 w-full border border-border bg-muted/40 text-muted-foreground py-2.5 text-sm font-semibold text-center"
+                      style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
+                    >
+                      {statusLabels[application.status] || 'Application Submitted'}
+                    </div>
+                  )
+                }
+
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setApplyingTo(j)}
+                    aria-label={`Apply for ${j.title}`}
+                    className="mt-3 w-full bg-primary text-primary-foreground py-2.5 text-sm font-semibold active:scale-[0.98] transition-transform gs-focus-ring"
+                    style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
+                  >
+                    Apply Now
+                  </button>
+                )
+              })()}
             </article>
           </li>
         ))}
@@ -326,6 +370,7 @@ function JobsView() {
 }
 
 function JobApplyForm({ job, onDone }) {
+  const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -341,6 +386,7 @@ function JobApplyForm({ job, onDone }) {
     setSubmitting(true)
     try {
       await jobApi.apply(job._id, { name, phone, message: message || undefined })
+      queryClient.invalidateQueries({ queryKey: ['jobs', 'my-applications'] })
       setSubmitted(true)
     } catch (err) {
       toast.error(getErrorMessage(err))
@@ -454,7 +500,160 @@ function JobApplyForm({ job, onDone }) {
 
 // ─── Contact Us ─────────────────────────────────────────────────────────────────
 
+function ProblemReportForm({ onDone }) {
+  const queryClient = useQueryClient()
+  const { user } = useAuthStore()
+  const [submitting, setSubmitting] = useState(false)
+
+  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+    queryKey: ['orders', 'my-orders', 'problem-report'],
+    queryFn: () => ordersApi.getMyOrders({ page: 1, limit: 20 }).then((r) => r.data),
+    enabled: !!user,
+    staleTime: 2 * 60 * 1000,
+  })
+
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(problemReportSchema),
+    defaultValues: {
+      problemType: 'technical',
+      order: '',
+      description: '',
+    },
+  })
+
+  const orders = ordersData?.orders || []
+
+  const onSubmit = async ({ problemType, order, description }) => {
+    setSubmitting(true)
+    try {
+      await problemReportApi.create({
+        problemType,
+        order: order || undefined,
+        description,
+      })
+      queryClient.invalidateQueries({ queryKey: ['problem-reports'] })
+      toast.success('Problem reported successfully')
+      onDone()
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (!user) {
+    return (
+      <main className="flex-1 px-4 py-6" aria-label="Report a problem">
+        <div
+          className="border border-border bg-card px-4 py-6 text-center"
+          style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
+        >
+          <p className="text-sm text-foreground">Please log in to report a problem.</p>
+          <button
+            type="button"
+            onClick={onDone}
+            className="mt-3 text-sm font-semibold text-primary underline gs-focus-ring rounded-sm px-2 py-1"
+          >
+            Back to Contact Us
+          </button>
+        </div>
+      </main>
+    )
+  }
+
+  const inputClass = 'w-full border border-border bg-card px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20'
+  const inputStyle = { borderRadius: 'var(--gs-radius-lg, 0.75rem)' }
+
+  return (
+    <main className="flex-1 px-4 py-4" aria-label="Report a problem">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        <div>
+          <label htmlFor="problem-type" className="mb-1.5 block text-sm font-medium text-foreground">
+            Problem type
+          </label>
+          <select
+            id="problem-type"
+            {...register('problemType')}
+            className={inputClass}
+            style={inputStyle}
+          >
+            <option value="order">Order issue</option>
+            <option value="payment">Payment issue</option>
+            <option value="delivery">Delivery issue</option>
+            <option value="food_menu">Food / Menu issue</option>
+            <option value="technical">App / Technical issue</option>
+            <option value="other">Other</option>
+          </select>
+          {errors.problemType && (
+            <p className="mt-1 text-xs text-destructive">{errors.problemType.message}</p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="problem-order" className="mb-1.5 block text-sm font-medium text-foreground">
+            Related order <span className="font-normal text-muted-foreground">(optional)</span>
+          </label>
+          <select
+            id="problem-order"
+            {...register('order')}
+            className={inputClass}
+            style={inputStyle}
+            disabled={ordersLoading}
+          >
+            <option value="">
+              {ordersLoading ? 'Loading recent orders...' : 'No specific order'}
+            </option>
+            {orders.map((order) => (
+              <option key={order._id} value={order._id}>
+                {order.orderNumber}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="problem-description" className="mb-1.5 block text-sm font-medium text-foreground">
+            Describe the problem
+          </label>
+          <textarea
+            id="problem-description"
+            {...register('description')}
+            rows={6}
+            maxLength={2000}
+            placeholder="Tell us what went wrong..."
+            className={`${inputClass} resize-y`}
+            style={inputStyle}
+          />
+          {errors.description && (
+            <p className="mt-1 text-xs text-destructive">{errors.description.message}</p>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onDone}
+            disabled={submitting}
+            className="flex-1 border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground gs-focus-ring disabled:opacity-50"
+            style={inputStyle}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex-1 bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground gs-focus-ring disabled:opacity-50"
+            style={inputStyle}
+          >
+            {submitting ? 'Sending...' : 'Submit Report'}
+          </button>
+        </div>
+      </form>
+    </main>
+  )
+}
 function ContactUsView() {
+  const [showReportForm, setShowReportForm] = useState(false)
   const { data, isLoading } = useQuery({
     queryKey: ['settings', 'public'],
     queryFn: () => settingsApi.getPublic().then((r) => r.data),
@@ -464,23 +663,18 @@ function ContactUsView() {
   const contact = data?.contactInfo || {}
   const hasAny = contact.phone || contact.whatsapp || contact.email || contact.address || contact.facebook || contact.instagram
 
+  if (showReportForm) {
+    return <ProblemReportForm onDone={() => setShowReportForm(false)} />
+  }
+
   if (isLoading) return <CenteredSpinner label="Loading contact details" />
   if (!hasAny) return <EmptyState icon={Phone} text="Contact details coming soon" />
 
   const rows = [
-    contact.phone && {
-      icon: Phone, label: 'Call us', value: `+977 ${contact.phone}`, href: `tel:+977${contact.phone}`,
-    },
-    contact.whatsapp && {
-      icon: MessageCircle, label: 'WhatsApp', value: `+977 ${contact.whatsapp}`,
-      href: `https://wa.me/977${contact.whatsapp}`,
-    },
-    contact.email && {
-      icon: Mail, label: 'Email', value: contact.email, href: `mailto:${contact.email}`,
-    },
-    contact.address && {
-      icon: MapPin, label: 'Address', value: contact.address, href: contact.mapLink || undefined,
-    },
+    contact.phone && { icon: Phone, label: 'Call us', value: `+977 ${contact.phone}`, href: `tel:+977${contact.phone}` },
+    contact.whatsapp && { icon: MessageCircle, label: 'WhatsApp', value: `+977 ${contact.whatsapp}`, href: `https://wa.me/977${contact.whatsapp}` },
+    contact.email && { icon: Mail, label: 'Email', value: contact.email, href: `mailto:${contact.email}` },
+    contact.address && { icon: MapPin, label: 'Address', value: contact.address, href: contact.mapLink || undefined },
     contact.facebook && { icon: Globe, label: 'Facebook', value: 'Visit our page', href: contact.facebook },
     contact.instagram && { icon: Globe, label: 'Instagram', value: 'Visit our page', href: contact.instagram },
   ].filter(Boolean)
@@ -532,12 +726,30 @@ function ContactUsView() {
           })}
         </ul>
       </address>
+
+      <button
+        type="button"
+        onClick={() => setShowReportForm(true)}
+        className="mt-4 flex w-full items-center gap-3 px-4 min-h-[52px] bg-card border border-border gs-focus-ring text-left"
+        style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
+        aria-label="Report a problem"
+      >
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center bg-primary/10 text-primary"
+          style={{ borderRadius: 'var(--gs-radius-full, 9999px)' }}
+          aria-hidden="true"
+        >
+          <FileText size={14} aria-hidden="true" />
+        </span>
+        <span className="flex-1">
+          <span className="block text-sm font-medium text-foreground">Report a Problem</span>
+          <span className="block text-xs text-muted-foreground">Tell us what went wrong</span>
+        </span>
+        <ChevronRight size={16} className="text-muted-foreground shrink-0" aria-hidden="true" />
+      </button>
     </main>
   )
 }
-
-// ─── About Us ───────────────────────────────────────────────────────────────────
-
 function AboutUsView() {
   const { data, isLoading } = useQuery({
     queryKey: ['settings', 'public'],

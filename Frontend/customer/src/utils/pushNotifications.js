@@ -1,22 +1,13 @@
-import { PushNotifications } from '@capacitor/push-notifications';
+﻿import { PushNotifications } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { isCapacitorNative } from '@shared/auth/roleRedirect';
 import api from '@/api/axios';
 import { toast } from 'sonner';
 
-// Module-level flag — survives re-renders, resets on full page reload (which
-// is fine: the native layer also re-initialises on a hard reload).
 let _initialized = false;
 
 export async function initPushNotifications(navigate) {
-  if (!isCapacitorNative()) {
-    return; // PWA / web: push handled by service-worker, not Capacitor
-  }
-
-  if (_initialized) {
-    // Already registered — Capacitor will fire 'registration' again if the
-    // token rotates, so we don't need to re-add listeners.
-    return;
-  }
+  if (!isCapacitorNative() || _initialized) return;
 
   try {
     let permStatus = await PushNotifications.checkPermissions();
@@ -26,41 +17,68 @@ export async function initPushNotifications(navigate) {
     }
 
     if (permStatus.receive !== 'granted') {
-      console.warn('[PushNotifications] Permission not granted for push notifications.');
+      console.warn('[PushNotifications] Permission not granted.');
       return;
     }
 
-    // Mark before adding listeners so a rapid double-call doesn't race
+    // Create a dedicated channel for foreground push notifications.
+    // Android controls the channel's sound through system notification settings.
+    try {
+      await LocalNotifications.createChannel({
+        id: 'gaunleswad_alerts_v1',
+        name: 'Gaunle Swad Alerts',
+        description: 'Order updates and other app notifications',
+        importance: 4,
+        visibility: 1,
+        sound: 'default',
+      });
+    } catch (error) {
+      console.warn('[PushNotifications] Channel setup warning:', error);
+    }
+
     _initialized = true;
 
-    // Register with the OS — fires 'registration' listener with the FCM token
-    await PushNotifications.register();
-
-    PushNotifications.addListener('registration', async (token) => {
-      console.log('[PushNotifications] FCM Device Token (Customer):', token.value);
+    // Register every listener before registering with the operating system.
+    await PushNotifications.addListener('registration', async (token) => {
+      console.log('[PushNotifications] FCM token received.');
       try {
         await api.post('/auth/fcm-token', { fcmToken: token.value });
         console.log('[PushNotifications] FCM token registered with backend.');
-      } catch (err) {
-        console.error('[PushNotifications] Failed to send FCM token to backend:', err);
+      } catch (error) {
+        console.error('[PushNotifications] Failed to register FCM token:', error);
       }
     });
 
-    PushNotifications.addListener('registrationError', (error) => {
+    await PushNotifications.addListener('registrationError', (error) => {
       console.error('[PushNotifications] Registration error:', error);
     });
 
-    // Show in-app toast when app is in foreground
-    PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      toast.info(notification.title || 'Gaunle Swad Alert', {
-        description: notification.body || '',
-      });
+    await PushNotifications.addListener('pushNotificationReceived', async (notification) => {
+      const title = notification.title || 'Gaunle Swad Alert';
+      const body = notification.body || '';
+
+      toast.info(title, { description: body });
+
+      try {
+        await LocalNotifications.schedule({
+          notifications: [{
+            id: Math.floor(Date.now() % 2147483647),
+            title,
+            body,
+            channelId: 'gaunleswad_alerts_v1',
+            schedule: { at: new Date(Date.now() + 1000) },
+            extra: notification.data || {},
+          }],
+        });
+      } catch (error) {
+        console.error('[PushNotifications] Foreground local notification failed:', error);
+      }
     });
 
-    // Navigate on tap when app is backgrounded / killed
-    PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-      const data = notification.notification?.data;
+    await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
+      const data = event.notification?.data;
       if (!navigate) return;
+
       if (data?.orderId) {
         navigate(`/track/${data.orderId}`);
       } else if (data?.type === 'abandoned_cart') {
@@ -76,14 +94,15 @@ export async function initPushNotifications(navigate) {
         navigate('/orders');
       }
     });
+
+    await PushNotifications.register();
+    console.log('[PushNotifications] Registration requested.');
   } catch (error) {
-    // Reset so a retry after a transient error is possible
     _initialized = false;
-    console.error('[PushNotifications] Failed to initialise customer push notifications:', error);
+    console.error('[PushNotifications] Initialization failed:', error);
   }
 }
 
-/** Call on logout so the next login re-registers cleanly. */
 export function resetPushNotifications() {
   _initialized = false;
 }

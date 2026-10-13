@@ -73,5 +73,16 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     port: 5174,
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url === '/admin') {
+          res.statusCode = 301
+          res.setHeader('Location', '/admin/')
+          res.end()
+          return
+        }
+        next()
+      })
+    },
   },
 }))

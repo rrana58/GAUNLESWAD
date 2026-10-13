@@ -3,6 +3,8 @@ const { createAdapter } = require("@socket.io/redis-adapter");
 const { createClient } = require("ioredis");
 const jwt = require("jsonwebtoken");
 const { logger, securityLogger } = require("../utils/logger");
+const Order = require("../models/Order");
+const RiderLocation = require("../models/RiderLocation");
 
 let io;
 
@@ -33,7 +35,7 @@ const initSocket = async (server) => {
     transports: ["websocket", "polling"],
   });
 
-  // ─── Redis Adapter — required for horizontal scaling (multiple server instances) ──
+  // â”€â”€â”€ Redis Adapter â€” required for horizontal scaling (multiple server instances) â”€â”€
   // Without this, a socket event emitted from Server A won't reach clients on Server B.
   try {
     const pubClient = createClient(process.env.REDIS_URL || "redis://localhost:6379", {
@@ -46,13 +48,13 @@ const initSocket = async (server) => {
     subClient.on("error", (err) => logger.error(`Socket sub-Redis error: ${err.message}`));
 
     io.adapter(createAdapter(pubClient, subClient));
-    logger.info("✅ Socket.IO Redis adapter attached (horizontal scaling ready)");
+    logger.info("âœ… Socket.IO Redis adapter attached (horizontal scaling ready)");
   } catch (err) {
-    // Non-fatal in development — single-server mode still works
-    logger.warn(`Socket.IO Redis adapter failed — running in single-server mode: ${err.message}`);
+    // Non-fatal in development â€” single-server mode still works
+    logger.warn(`Socket.IO Redis adapter failed â€” running in single-server mode: ${err.message}`);
   }
 
-  // ─── Auth middleware ────────────────────────────────────────────────────────
+  // â”€â”€â”€ Auth middleware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     const ip = socket.handshake.address;
@@ -70,7 +72,7 @@ const initSocket = async (server) => {
         });
         socket.user = decoded;
       } catch {
-        // Guests can connect without a valid token — just don't set socket.user
+        // Guests can connect without a valid token â€” just don't set socket.user
       }
     }
     next();
@@ -80,13 +82,50 @@ const initSocket = async (server) => {
     const ip = socket.handshake.address;
     logger.debug(`Socket connected: ${socket.id} from ${ip}`);
 
-    // Customer joins their order room
-    socket.on("join:order", (orderId) => {
-      if (!/^[0-9a-f]{24}$/.test(orderId)) return;
-      socket.join(`order:${orderId}`);
-    });
+    // Authorized users join their order room
+    socket.on("join:order", async (orderId) => {
+      if (!/^[0-9a-f]{24}$/.test(String(orderId || ""))) return;
 
-    // Admin joins the admin room — only authenticated admins allowed
+      try {
+        const order = await Order.findById(orderId).select(
+          "_id customer deliveryPerson"
+        );
+
+        if (!order) return;
+
+        const userId = socket.user?.id || socket.user?._id;
+        const userRole = socket.user?.role;
+
+        const isCustomer =
+          userRole === "customer" &&
+          order.customer?.toString() === String(userId);
+
+        const isAssignedRider =
+          userRole === "delivery" &&
+          order.deliveryPerson?.toString() === String(userId);
+
+        const isAuthorizedStaff =
+          userRole === "admin" || userRole === "kitchen";
+
+        if (!isCustomer && !isAssignedRider && !isAuthorizedStaff) {
+          securityLogger.warn(
+            `Unauthorized order room join: user ${userId || "guest"} attempted order ${orderId}`
+          );
+          return;
+        }
+
+        socket.join(`order:${order._id}`);
+      } catch (error) {
+        logger.error(`Order room join failed: ${error.message}`);
+      }
+    });
+    // Customer joins their own room for targeted notifications
+    socket.on("join:customer", () => {
+      if (socket.user?.role === "customer") {
+        socket.join(`customer:${socket.user.id}`); console.log(`Customer joined notification room: customer:${socket.user.id}`);
+      }
+    });
+    // Admin joins the admin room â€” only authenticated admins allowed
     socket.on("join:admin", () => {
       if (socket.user?.role === "admin") {
         socket.join("admin");
@@ -112,6 +151,80 @@ const initSocket = async (server) => {
     });
 
     // Delivery joins global delivery room for all updates
+    socket.on("rider:location:update", async (payload = {}) => {
+      if (socket.user?.role !== "delivery") {
+        securityLogger.warn(`Unauthorized rider location update from ${socket.handshake.address}`);
+        return;
+      }
+
+      const {
+        orderId,
+        latitude,
+        longitude,
+        accuracy = null,
+        heading = null,
+        speed = null,
+      } = payload;
+
+      if (
+        !/^[0-9a-f]{24}$/.test(String(orderId || "")) ||
+        !Number.isFinite(Number(latitude)) ||
+        !Number.isFinite(Number(longitude)) ||
+        Number(latitude) < -90 ||
+        Number(latitude) > 90 ||
+        Number(longitude) < -180 ||
+        Number(longitude) > 180
+      ) {
+        return;
+      }
+
+      try {
+        const order = await Order.findOne({
+          _id: orderId,
+          deliveryPerson: socket.user.id,
+          status: "out_for_delivery",
+          deliveryType: "delivery",
+        }).select("_id");
+
+        if (!order) {
+          securityLogger.warn(
+            `Rider ${socket.user.id} attempted location update for unauthorized order ${orderId}`
+          );
+          return;
+        }
+
+        const location = await RiderLocation.findOneAndUpdate(
+          { rider: socket.user.id },
+          {
+            $set: {
+              latitude: Number(latitude),
+              longitude: Number(longitude),
+              accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : null,
+              heading: Number.isFinite(Number(heading)) ? Number(heading) : null,
+              speed: Number.isFinite(Number(speed)) ? Number(speed) : null,
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true,
+          }
+        );
+
+        io.to(`order:${order._id}`).emit("rider:location:update", {
+          orderId: String(order._id),
+          riderId: String(socket.user.id),
+          latitude: location.latitude,
+          longitude: location.longitude,
+          accuracy: location.accuracy,
+          heading: location.heading,
+          speed: location.speed,
+          updatedAt: location.updatedAt,
+        });
+      } catch (error) {
+        logger.error(`Rider location update failed: ${error.message}`);
+      }
+    });
     socket.on("join:delivery_all", () => {
       if (socket.user?.role === "delivery" || socket.user?.role === "admin") {
         socket.join("delivery_all");
@@ -124,7 +237,7 @@ const initSocket = async (server) => {
     socket.use((packet, next) => {
       eventCount++;
       if (eventCount > 50) {
-        securityLogger.warn(`Socket event flood from ${ip} — disconnecting`);
+        securityLogger.warn(`Socket event flood from ${ip} â€” disconnecting`);
         socket.disconnect(true);
         return;
       }
@@ -137,7 +250,7 @@ const initSocket = async (server) => {
     });
   });
 
-  logger.info("✅ Socket.IO initialized");
+  logger.info("âœ… Socket.IO initialized");
   return io;
 };
 
@@ -176,4 +289,8 @@ const emitDeliveryAssignment = (deliveryUserId, order) => {
   });
 };
 
-module.exports = { initSocket, getIO, emitOrderUpdate, emitNewOrder, emitDeliveryAssignment };
+const emitCustomerNotification = (userId, notification) => {
+  if (!io) return;
+  io.to(`customer:${userId}`).emit("notification:new", notification);
+};
+module.exports = { initSocket, getIO, emitOrderUpdate, emitNewOrder, emitDeliveryAssignment, emitCustomerNotification };

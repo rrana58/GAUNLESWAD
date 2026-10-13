@@ -47,7 +47,11 @@ function SessionModal({ session, onClose, onSave }) {
     endHour: session?.endHour ?? 16,
     discountPercent: session?.discountPercent || 20,
     activeDate: session?.activeDate || new Date().toISOString().split('T')[0],
-    items: session?.items?.map((i) => i._id || i) || [],
+    items: (session?.items || []).map((entry) => ({
+      menuItem: entry.menuItem?._id || entry.menuItem || entry._id || entry,
+      allVariants: entry.allVariants !== false,
+      variants: Array.isArray(entry.variants) ? entry.variants : [],
+    })),
   })
   const [loading, setLoading] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
@@ -62,10 +66,61 @@ function SessionModal({ session, onClose, onSave }) {
     item.name.toLowerCase().includes(itemSearch.toLowerCase())
   )
 
+  const getSelectedItem = (id) =>
+    form.items.find((entry) => entry.menuItem === id)
+
   const toggleItem = (id) => {
+    setForm((f) => {
+      const exists = f.items.some((entry) => entry.menuItem === id)
+
+      return {
+        ...f,
+        items: exists
+          ? f.items.filter((entry) => entry.menuItem !== id)
+          : [
+              ...f.items,
+              {
+                menuItem: id,
+                allVariants: true,
+                variants: [],
+              },
+            ],
+      }
+    })
+  }
+
+  const setVariantMode = (itemId, allVariants) => {
     setForm((f) => ({
       ...f,
-      items: f.items.includes(id) ? f.items.filter((i) => i !== id) : [...f.items, id],
+      items: f.items.map((entry) =>
+        entry.menuItem === itemId
+          ? {
+              ...entry,
+              allVariants,
+              variants: allVariants ? [] : entry.variants,
+            }
+          : entry
+      ),
+    }))
+  }
+
+  const toggleVariant = (itemId, variantId) => {
+    setForm((f) => ({
+      ...f,
+      items: f.items.map((entry) => {
+        if (entry.menuItem !== itemId) return entry
+
+        const variants = entry.variants || []
+        const exists = variants.some((id) => String(id) === String(variantId))
+
+        return {
+          ...entry,
+          allVariants: false,
+          variants: exists
+            ? variants.filter((id) => String(id) !== String(variantId))
+            : [...variants, variantId],
+        }
+      }),
     }))
   }
 
@@ -74,6 +129,20 @@ function SessionModal({ session, onClose, onSave }) {
     if (!form.name.trim()) return toast.error('Name is required')
     if (!form.displayName.trim()) return toast.error('Display name is required')
     if (form.items.length === 0) return toast.error('Select at least one item')
+
+    const invalidVariantSelection = form.items.find((entry) => {
+      const item = availableItems.find((candidate) => candidate._id === entry.menuItem)
+      const hasVariants = Array.isArray(item?.variants) && item.variants.length > 0
+
+      return hasVariants && !entry.allVariants && entry.variants.length === 0
+    })
+
+    if (invalidVariantSelection) {
+      const item = availableItems.find(
+        (candidate) => candidate._id === invalidVariantSelection.menuItem
+      )
+      return toast.error(`Select All Variants or at least one variant for ${item?.name || 'the selected item'}`)
+    }
     if (form.startHour === form.endHour) return toast.error('Start and end hour must differ')
     setLoading(true)
     try {
@@ -228,30 +297,100 @@ function SessionModal({ session, onClose, onSave }) {
             ) : filteredAvailableItems.length === 0 ? (
               <p className="text-sm text-muted-foreground p-4 text-center">No items match "{itemSearch}"</p>
             ) : (
-              filteredAvailableItems.map((item) => (
-                <div key={item._id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors">
-                  <input
-                    id={`item-${item._id}`}
-                    name="items"
-                    type="checkbox"
-                    checked={form.items.includes(item._id)}
-                    onChange={() => toggleItem(item._id)}
-                    className="rounded cursor-pointer"
-                  />
-                  <Label htmlFor={`item-${item._id}`} className="flex items-center gap-3 cursor-pointer flex-1">
-                    {item.image?.url && (
-                      <img
-                        src={item.image.url}
-                        alt=""
-                        className="w-7 h-7 object-cover"
-                        style={{ borderRadius: 'var(--gs-admin-radius-md)' }}
-                      />
-                    )}
-                    <span className="text-sm text-foreground">{item.name}</span>
-                    <span className="text-xs text-muted-foreground/60">Rs. {item.basePrice}</span>
-                  </Label>
+              filteredAvailableItems.map((item) => {
+          const selected = getSelectedItem(item._id)
+          const hasVariants =
+            Array.isArray(item.variants) && item.variants.length > 0
+          const availableVariants = hasVariants
+            ? item.variants.filter((variant) => variant.isAvailable !== false)
+            : []
+
+          return (
+            <div
+              key={item._id}
+              className="px-4 py-3 hover:bg-muted transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  id={`item-${item._id}`}
+                  name="items"
+                  type="checkbox"
+                  checked={Boolean(selected)}
+                  onChange={() => toggleItem(item._id)}
+                  className="rounded cursor-pointer"
+                />
+
+                <Label
+                  htmlFor={`item-${item._id}`}
+                  className="flex items-center gap-3 cursor-pointer flex-1"
+                >
+                  {item.image?.url && (
+                    <img
+                      src={item.image.url}
+                      alt=""
+                      className="w-7 h-7 object-cover"
+                      style={{ borderRadius: 'var(--gs-admin-radius-md)' }}
+                    />
+                  )}
+                  <span className="text-sm text-foreground">{item.name}</span>
+                  <span className="text-xs text-muted-foreground/60">
+                    Rs. {item.basePrice}
+                  </span>
+                </Label>
+              </div>
+
+              {selected && hasVariants && (
+                <div className="ml-8 mt-2 space-y-2 border-l border-border pl-4">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name={`variant-mode-${item._id}`}
+                      checked={selected.allVariants}
+                      onChange={() => setVariantMode(item._id, true)}
+                    />
+                    <span>All Variants</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name={`variant-mode-${item._id}`}
+                      checked={!selected.allVariants}
+                      onChange={() => setVariantMode(item._id, false)}
+                    />
+                    <span>Specific Variants</span>
+                  </label>
+
+                  {!selected.allVariants && (
+                    <div className="ml-5 space-y-1.5">
+                      {availableVariants.map((variant) => (
+                        <label
+                          key={variant._id}
+                          className="flex items-center gap-2 text-sm cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected.variants.some(
+                              (id) => String(id) === String(variant._id)
+                            )}
+                            onChange={() =>
+                              toggleVariant(item._id, variant._id)
+                            }
+                            className="rounded cursor-pointer"
+                          />
+                          <span>{variant.name}</span>
+                          <span className="text-xs text-muted-foreground/60">
+                            Rs. {variant.price}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))
+              )}
+            </div>
+          )
+        })
             )}
           </div>
         </fieldset>
@@ -305,6 +444,24 @@ export default function SessionsPage() {
   })
 
   const formatHour = (h) => `${h.toString().padStart(2, '0')}:00`
+
+  const getSessionStatus = (session) => {
+    if (!session.isActive) return 'inactive'
+
+    const nptNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+    const currentHour = nptNow.getHours()
+
+    if (session.activeDate < dateFilter) return 'expired'
+    if (session.activeDate > dateFilter) return 'active'
+
+    if (session.endHour > session.startHour) {
+      return currentHour >= session.endHour ? 'expired' : 'active'
+    }
+
+    return currentHour >= session.endHour && currentHour < session.startHour
+      ? 'expired'
+      : 'active'
+  }
 
   return (
     <main className="space-y-5" aria-label="Special sessions management">
@@ -363,7 +520,7 @@ export default function SessionsPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-foreground">{session.displayName}</h3>
-                    <StatusBadge status={session.isActive ? 'active' : 'inactive'} size="sm" />
+                    <StatusBadge status={getSessionStatus(session)} size="sm" />
                   </div>
                   {session.tagline && (
                     <p className="text-sm text-muted-foreground mt-0.5">{session.tagline}</p>
@@ -411,42 +568,52 @@ export default function SessionsPage() {
               {/* Items preview */}
               {session.items?.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {session.items.slice(0, 6).map((item) => (
-                    <div
-                      key={item._id || item}
-                      className="flex items-center gap-1.5 px-2.5 py-1"
-                      style={{
-                        backgroundColor: 'var(--gs-admin-accent-muted)',
-                        borderRadius: 'var(--gs-admin-radius-lg)',
-                      }}
-                    >
-                      {item.image?.url && (
-                        <img
-                          src={item.image.url}
-                          alt=""
-                          className="w-4 h-4 object-cover"
-                          style={{ borderRadius: 'var(--gs-admin-radius-sm)' }}
-                        />
-                      )}
-                      <span
-                        className="text-xs font-medium"
-                        style={{ color: 'var(--gs-admin-accent)' }}
-                      >
-                        {item.name}
-                      </span>
-                      {item.basePrice && (
-                        <span className="text-xs text-muted-foreground/60 line-through">Rs.{item.basePrice}</span>
-                      )}
-                      {item.basePrice && (
-                        <span
-                          className="text-xs font-medium"
-                          style={{ color: 'var(--gs-admin-accent)' }}
-                        >
-                          Rs.{Math.round(item.basePrice * (1 - session.discountPercent / 100))}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                  {session.items.slice(0, 6).map((entry) => {
+              const item = entry.menuItem || entry
+
+              const selectedVariants = Array.isArray(entry.variants)
+                ? entry.variants
+                    .map((variantId) =>
+                      item.variants?.find(
+                        (variant) => String(variant._id) === String(variantId)
+                      )
+                    )
+                    .filter(Boolean)
+                : []
+
+              return (
+                <div
+                  key={entry._id || item._id}
+                  className="flex items-center gap-1.5 px-2.5 py-1"
+                  style={{
+                    backgroundColor: 'var(--gs-admin-accent-muted)',
+                    borderRadius: 'var(--gs-admin-radius-lg)',
+                  }}
+                >
+                  {item.image?.url && (
+                    <img
+                      src={item.image.url}
+                      alt=""
+                      className="w-4 h-4 object-cover"
+                      style={{ borderRadius: 'var(--gs-admin-radius-sm)' }}
+                    />
+                  )}
+
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: 'var(--gs-admin-accent)' }}
+                  >
+                    {item.name}
+                  </span>
+
+                  {entry.allVariants === false && selectedVariants.length > 0 && (
+                    <span className="text-xs text-muted-foreground/70">
+                      ({selectedVariants.map((variant) => variant.name).join(', ')})
+                    </span>
+                  )}
+                </div>
+              )
+            })}
                   {session.items.length > 6 && (
                     <span className="text-xs text-muted-foreground/60 px-2 py-1">
                       +{session.items.length - 6} more

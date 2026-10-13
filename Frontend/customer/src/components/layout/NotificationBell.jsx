@@ -1,15 +1,20 @@
+import { createPortal } from 'react-dom'
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { Bell as BellIcon, Check } from 'lucide-react'
 import { notificationsApi } from '@/api/notifications'
+import { connectSocket } from '@/lib/socket'
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const panelRef = useRef(null)
+  const bellRef = useRef(null)
+  const [panelPosition, setPanelPosition] = useState({ top: 0, right: 16 })
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const notificationSoundRef = useRef(null)
 
   const { data } = useQuery({
     queryKey: ['notifications'],
@@ -22,12 +27,63 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!open) return
     const onClick = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false)
+      if (
+        panelRef.current &&
+        !panelRef.current.contains(e.target) &&
+        bellRef.current &&
+        !bellRef.current.contains(e.target)
+      ) setOpen(false)
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [open])
 
+  useEffect(() => {
+    const socket = connectSocket()
+
+    const handleNotification = async (notification) => {
+      console.log('[NOTIFICATION] Realtime notification received', notification)
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext
+        if (!notificationSoundRef.current && AudioContextClass) {
+          notificationSoundRef.current = new AudioContextClass()
+        }
+
+        const audioContext = notificationSoundRef.current
+        if (!audioContext) return
+
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume()
+      }
+
+        const oscillator = audioContext.createOscillator()
+        const gain = audioContext.createGain()
+
+        oscillator.type = 'sine'
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime)
+        gain.gain.setValueAtTime(0.12, audioContext.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.25)
+
+        oscillator.connect(gain)
+        gain.connect(audioContext.destination)
+
+        oscillator.start()
+        oscillator.stop(audioContext.currentTime + 0.25)
+      } catch {
+        // Browser audio may be blocked until the user interacts with the page.
+      }
+    }
+
+    socket.on('order:updated', handleNotification)
+    socket.on('notification:new', handleNotification)
+
+    return () => {
+      socket.off('order:updated', handleNotification)
+      socket.off('notification:new', handleNotification)
+    }
+  }, [queryClient])
   const handleItemClick = (n) => {
     if (!n.isRead) {
       queryClient.setQueryData(['notifications'], (prev) =>
@@ -42,8 +98,11 @@ export default function NotificationBell() {
     } else if (n.data?.type === 'abandoned_cart') {
       navigate('/cart')
       setOpen(false)
-    } else if (n.type === 'promo') {
-      navigate('/')
+    } else if (n.data?.type === 'career_job' || n.data?.type === 'career_application_status') {
+    navigate('/more?view=jobs')
+    setOpen(false)
+  } else if (n.type === 'promo') {
+      navigate('/more?view=promos')
       setOpen(false)
     }
   }
@@ -56,8 +115,9 @@ export default function NotificationBell() {
   return (
     <div className="relative shrink-0" ref={panelRef}>
       <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label={unreadCount > 0 ? `Notifications — ${unreadCount} unread` : 'Notifications'}
+        ref={bellRef}
+        onClick={() => navigate('/notifications')}
+        aria-label={unreadCount > 0 ? `Notifications ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ${unreadCount} unread` : 'Notifications'}
         aria-expanded={open}
         className="relative flex h-9 w-9 items-center justify-center rounded-full gs-focus-ring"
         style={{ color: 'var(--gs-bg, #FAF8F5)' }}
@@ -73,12 +133,12 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
           role="menu"
           aria-label="Notifications"
-          className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-card border border-border shadow-lg text-left"
-          style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)', zIndex: 'var(--gs-z-modal, 1300)' }}
+          className="fixed w-80 max-h-96 overflow-y-auto bg-card border border-border shadow-lg text-left"
+          style={{ top: panelPosition.top, right: panelPosition.right, borderRadius: 'var(--gs-radius-lg, 0.75rem)', zIndex: 9999 }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-border sticky top-0 bg-card">
             <span className="font-display font-semibold text-sm text-foreground">Notifications</span>
@@ -121,7 +181,8 @@ export default function NotificationBell() {
               ))}
             </ul>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

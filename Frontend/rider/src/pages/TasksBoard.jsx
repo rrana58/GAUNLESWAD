@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../utils/axios";
 import { toast } from "sonner";
 import { getSocket, disconnectSocket } from "../lib/socket";
+import { watchRiderLocation, stopWatchingRiderLocation } from "../utils/riderLocation";
 import OrderCard from "../components/OrderCard";
 import { playNotificationSound } from "../utils/sound";
 
@@ -33,7 +34,7 @@ export default function TasksBoard() {
       socket.emit("join:delivery");
       socket.emit("join:delivery_all");
     };
-    
+
     const handleOrderAssigned = (payload) => {
       fetchOrders();
       if (window.__riderSoundEnabled !== false) {
@@ -60,7 +61,7 @@ export default function TasksBoard() {
            });
            return prev;
         }
-        
+
         if (status === "delivered" || status === "cancelled") {
           return prev.filter((o) => o._id !== orderId);
         }
@@ -88,7 +89,7 @@ export default function TasksBoard() {
     try {
       await api.patch(`/orders/${orderId}/status`, { status: newStatus });
       toast.success(newStatus === "delivered" ? "Delivery Complete! 🎉" : "Order Picked Up!");
-      
+
       // If delivered, remove from list after a short delay
       if (newStatus === "delivered") {
         setTimeout(() => {
@@ -101,6 +102,42 @@ export default function TasksBoard() {
     }
   };
 
+  useEffect(() => {
+    const activeOrder = orders.find(
+      (order) => order.status === "out_for_delivery"
+    );
+
+    if (!activeOrder) {
+      return undefined;
+    }
+
+    const socket = getSocket();
+
+    const watchId = watchRiderLocation(
+      (position) => {
+        if (!socket.connected) {
+          return;
+        }
+
+        console.log("[Rider GPS] Sending location:", position)
+      socket.emit("rider:location:update", {
+          orderId: activeOrder._id,
+          latitude: position.lat,
+          longitude: position.lng,
+          accuracy: position.accuracy,
+          heading: position.heading,
+          speed: position.speed,
+        });
+      },
+      () => {
+        toast.error("Unable to track your live location.");
+      }
+    );
+
+    return () => {
+      stopWatchingRiderLocation(watchId);
+    };
+  }, [orders]);
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center pt-20">

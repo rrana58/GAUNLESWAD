@@ -6,6 +6,7 @@ export const ordersApi = {
   getMyOrders: (params) => api.get('/orders/my-orders', { params }),
   getClosedDates: () => api.get('/orders/closed-dates'),
   getOrder: (id) => api.get(`/orders/${id}`),
+  getRiderLocation: (id) => api.get(`/orders/${id}/rider-location`),
   cancelOrder: (id, reason) => api.patch(`/orders/${id}/cancel`, { reason }),
   rateOrder: (id, payload) => api.post(`/orders/${id}/rate`, payload), // { foodRating, deliveryRating?, comment? }
 }
@@ -19,10 +20,10 @@ export const addressApi = {
 }
 
 export const paymentApi = {
-  initiateKhalti: (orderId) => api.post('/payments/khalti/initiate', { orderId }),
+  initiateKhalti: (orderId, trackingToken) => api.post('/payments/khalti/initiate', { orderId, trackingToken }),
   verifyKhalti: (pidx) => api.post('/payments/khalti/verify', { pidx }),
-  getEsewaData: (orderId) => api.post('/payments/esewa/data', { orderId }),
-  verifyEsewa: (data, orderId) => api.post('/payments/esewa/verify', { data, orderId }),
+  getEsewaData: (orderId, trackingToken) => api.post('/payments/esewa/data', { orderId, trackingToken }),
+  verifyEsewa: (data) => api.post('/payments/esewa/verify', { data }),
   getOrderPayment: (orderId) => api.get(`/payments/order/${orderId}`),
 }
 
@@ -54,8 +55,14 @@ export const announcementApi = {
 }
 
 export const jobApi = {
+  getMyApplications: () => api.get('/jobs/my-applications'),
   getActive: () => api.get('/jobs/active'),
   apply: (jobId, payload) => api.post(`/jobs/${jobId}/apply`, payload), // { name, phone, message? }
+}
+
+export const problemReportApi = {
+  create: (payload) => api.post('/problem-reports', payload), // { problemType, order?, description }
+  getMyReports: () => api.get('/problem-reports/my'),
 }
 
 export const promoApi = {

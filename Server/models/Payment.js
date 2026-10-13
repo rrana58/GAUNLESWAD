@@ -21,8 +21,10 @@ const paymentSchema = new mongoose.Schema(
 
     // Gateway-specific fields
     gatewayTransactionId: String, // From Khalti/eSewa
+    transactionUuid: String, // eSewa transaction UUID
     pidx: String, // Khalti payment identifier
     refId: String, // eSewa reference ID
+    paymentUrl: String, // Gateway checkout URL
     
     // Raw response from gateway (for debugging)
     gatewayResponse: mongoose.Schema.Types.Mixed,
@@ -43,5 +45,6 @@ const paymentSchema = new mongoose.Schema(
 paymentSchema.index({ order: 1 });
 paymentSchema.index({ pidx: 1 });
 paymentSchema.index({ refId: 1 });
+paymentSchema.index({ transactionUuid: 1 });
 
 module.exports = mongoose.model("Payment", paymentSchema);

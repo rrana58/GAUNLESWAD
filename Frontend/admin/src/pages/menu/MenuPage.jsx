@@ -330,28 +330,6 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
     })
   }
 
-  const addAddon = () => {
-    setForm((f) => ({
-      ...f,
-      addons: [...f.addons, { name: '', price: '', isAvailable: true }],
-    }))
-  }
-
-  const removeAddon = (index) => {
-    setForm((f) => ({
-      ...f,
-      addons: f.addons.filter((_, i) => i !== index),
-    }))
-  }
-
-  const updateAddon = (index, field, value) => {
-    setForm((f) => {
-      const newAddons = [...f.addons]
-      newAddons[index] = { ...newAddons[index], [field]: value }
-      return { ...f, addons: newAddons }
-    })
-  }
-
   const handleImageChange = (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -540,113 +518,100 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
         </fieldset>
 
         {/* Variants Section */}
-        <fieldset className="border border-border p-4 rounded-lg space-y-3">
-          <legend className="px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Variants / Sub-items (e.g. Veg, Chicken, Buff)
-          </legend>
-          <div className="space-y-2">
-            {form.variants.map((v, idx) => (
-              <div key={idx} className="flex gap-2 items-center bg-muted/30 p-2 rounded-lg border border-border">
-                <Input
-                  placeholder="Variant Name"
-                  value={v.name}
-                  onChange={(e) => updateVariant(idx, 'name', e.target.value)}
-                  className="flex-1 h-9 bg-card"
-                  required
-                />
-                <Input
-                  type="number"
-                  placeholder="Price"
-                  value={v.price}
-                  onChange={(e) => updateVariant(idx, 'price', e.target.value)}
-                  className="w-24 h-9 bg-card"
-                  required
-                />
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={v.isAvailable}
-                    onChange={(e) => updateVariant(idx, 'isAvailable', e.target.checked)}
-                    className="rounded cursor-pointer"
-                  />
-                  <span className="text-xs text-muted-foreground select-none">Avail</span>
-                </label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => removeVariant(idx)}
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 h-8 w-8 rounded-full"
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addVariant}
-              className="w-full text-xs h-8 text-[var(--gs-admin-accent)] border-[var(--gs-admin-accent)]/30 hover:bg-[var(--gs-admin-accent)]/5"
-            >
-              <Plus size={14} className="mr-1" />
-              Add Variant Option
-            </Button>
+        <fieldset className="border border-border rounded-lg p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <legend className="text-sm font-semibold text-foreground">
+                Variants / Sub-items
+              </legend>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Add options such as Veg, Chicken, or Buff with their prices.
+              </p>
+            </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              Optional
+            </span>
           </div>
-        </fieldset>
 
-        {/* Add-ons Section */}
-        <fieldset className="border border-border p-4 rounded-lg space-y-3">
-          <legend className="px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Add-ons / Sides (e.g. Extra Achar, Extra Butter)
-          </legend>
-          <div className="space-y-2">
-            {form.addons.map((a, idx) => (
-              <div key={idx} className="flex gap-2 items-center bg-muted/30 p-2 rounded-lg border border-border">
-                <Input
-                  placeholder="Add-on Name"
-                  value={a.name}
-                  onChange={(e) => updateAddon(idx, 'name', e.target.value)}
-                  className="flex-1 h-9 bg-card"
-                  required
-                />
-                <Input
-                  type="number"
-                  placeholder="Price"
-                  value={a.price}
-                  onChange={(e) => updateAddon(idx, 'price', e.target.value)}
-                  className="w-24 h-9 bg-card"
-                  required
-                />
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={a.isAvailable}
-                    onChange={(e) => updateAddon(idx, 'isAvailable', e.target.checked)}
-                    className="rounded cursor-pointer"
-                  />
-                  <span className="text-xs text-muted-foreground select-none">Avail</span>
-                </label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => removeAddon(idx)}
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 h-8 w-8 rounded-full"
-                >
-                  <Trash2 size={14} />
-                </Button>
+          {form.variants.length > 0 && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_88px_72px_32px] items-center gap-2 px-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span>Variant</span>
+                <span>Price</span>
+                <span className="text-center">Available</span>
+                <span />
               </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addAddon}
-              className="w-full text-xs h-8 text-[var(--gs-admin-accent)] border-[var(--gs-admin-accent)]/30 hover:bg-[var(--gs-admin-accent)]/5"
-            >
-              <Plus size={14} className="mr-1" />
-              Add Add-on / Extra Option
-            </Button>
-          </div>
+
+              {form.variants.map((v, idx) => (
+                <div
+                  key={idx}
+                  className="grid grid-cols-[minmax(0,1fr)_88px_72px_32px] items-center gap-2 rounded-lg border border-border bg-muted/20 p-2"
+                >
+                  <Input
+                    placeholder="e.g. Chicken"
+                    value={v.name}
+                    onChange={(e) => updateVariant(idx, 'name', e.target.value)}
+                    className="h-9 bg-card"
+                    aria-label={`Variant ${idx + 1} name`}
+                    required
+                  />
+
+                  <Input
+                    type="number"
+                    placeholder="150"
+                    value={v.price}
+                    onChange={(e) => updateVariant(idx, 'price', e.target.value)}
+                    className="h-9 bg-card"
+                    aria-label={`Price for variant ${idx + 1}`}
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+
+                  <label className="flex items-center justify-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={v.isAvailable}
+                      onChange={(e) => updateVariant(idx, 'isAvailable', e.target.checked)}
+                      className="rounded cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground select-none">
+                      Yes
+                    </span>
+                  </label>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => removeVariant(idx)}
+                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full"
+                    aria-label={`Remove variant ${idx + 1}`}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {form.variants.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 text-center">
+              <p className="text-xs text-muted-foreground">
+                No variants added. Use variants when this item has different options or prices.
+              </p>
+            </div>
+          )}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addVariant}
+            className="w-full h-9 text-sm text-[var(--gs-admin-accent)] border-[var(--gs-admin-accent)]/30 hover:bg-[var(--gs-admin-accent)]/5"
+          >
+            <Plus size={14} className="mr-1.5" />
+            Add variant
+          </Button>
         </fieldset>
 
         {/* Toggles */}
@@ -656,7 +621,7 @@ function MenuItemModal({ item, categories, onClose, onSave }) {
             {[
               { id: 'item-available', name: 'isAvailable', label: 'Available' },
               { id: 'item-veg',       name: 'isVeg',       label: 'Vegetarian' },
-              { id: 'item-featured',  name: 'isFeatured',  label: 'Featured' },
+              { id: 'item-featured',  name: 'isFeatured',  label: 'Top Items' },
               { id: 'item-celebration', name: 'isCelebrationEligible', label: 'For Celebration' },
             ].map(({ id, name, label }) => (
               <div key={id} className="flex items-center gap-2">
@@ -1136,7 +1101,7 @@ export default function MenuPage() {
                                     borderRadius: 'var(--gs-admin-radius-sm)',
                                   }}
                                 >
-                                  Featured
+                                  Top Items
                                 </span>
                               )}
                             </span>

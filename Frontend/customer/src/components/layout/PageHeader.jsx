@@ -6,8 +6,8 @@ export default function PageHeader({ title, showBackButton = true, rightElement,
   const navigate = useNavigate()
   return (
     <header
-      className="sticky top-0 flex h-14 w-full items-center justify-between border-b border-border bg-background/95 backdrop-blur px-4 select-none"
-      style={{ zIndex: 'var(--gs-z-sticky, 1100)' }}
+      className="sticky top-0 flex h-14 w-full items-center justify-between border-b border-border bg-background/95 px-4 select-none"
+      style={{ zIndex: 10 }}
     >
       <div className="flex items-center gap-1.5">
         {showBackButton && (

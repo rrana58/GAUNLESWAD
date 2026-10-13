@@ -42,7 +42,8 @@ const T = {
   backLink:      'var(--gs-text-sub,        #6B7280)',
 };
 
-export default function UnifiedLoginPage({ api, onAuthSuccess, currentUser }) {
+export default function UnifiedLoginPage({ api, onAuthSuccess, currentUser, expectedRole, authApp }) {
+  const roleLabel = { admin: 'Admin Login', kitchen: 'Kitchen Staff Login', delivery: 'Rider Login' }[expectedRole] || '';
   const navigate = useNavigate();
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
@@ -82,12 +83,12 @@ export default function UnifiedLoginPage({ api, onAuthSuccess, currentUser }) {
 
   // Redirect automatically if user is already authenticated
   useEffect(() => {
-    const user = currentUser || getStoredUser();
-    if (user && user.role) {
+    const user = currentUser || getStoredUser(authApp);
+    if (user && user.role && (!expectedRole || user.role === expectedRole)) {
       const target = getRoleRedirectUrl(user.role);
       handleRedirect(target);
     }
-  }, [currentUser]);
+  }, [currentUser, authApp, expectedRole]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -110,7 +111,7 @@ export default function UnifiedLoginPage({ api, onAuthSuccess, currentUser }) {
         toast.info('Two-factor authentication required. Enter your code to continue.');
       } else if (result.type === 'authenticated') {
         const { user, accessToken, refreshToken } = result;
-        saveAuthSession(user, accessToken, refreshToken);
+        saveAuthSession(user, accessToken, refreshToken, authApp);
 
         if (onAuthSuccess) {
           onAuthSuccess(user, accessToken, refreshToken);
@@ -149,7 +150,7 @@ export default function UnifiedLoginPage({ api, onAuthSuccess, currentUser }) {
       const result = parseLoginResponse(res.data);
       if (result.type === 'authenticated') {
         const { user, accessToken, refreshToken } = result;
-        saveAuthSession(user, accessToken, refreshToken);
+        saveAuthSession(user, accessToken, refreshToken, authApp);
 
         if (onAuthSuccess) {
           onAuthSuccess(user, accessToken, refreshToken);
@@ -245,7 +246,14 @@ export default function UnifiedLoginPage({ api, onAuthSuccess, currentUser }) {
               className="text-xs uppercase tracking-[0.2em] mt-2 font-medium"
               style={{ color: T.copperAccent }}
             >
-              Staff Sign In
+              {roleLabel && (
+                <p
+                  className="text-xs uppercase tracking-[0.2em] mt-2 font-medium"
+                  style={{ color: T.copperAccent }}
+                >
+                  {roleLabel}
+                </p>
+              )}
             </p>
           </div>
 

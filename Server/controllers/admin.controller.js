@@ -2,6 +2,7 @@ const Order = require("../models/Order");
 const User = require("../models/User");
 const MenuItem = require("../models/MenuItem");
 const Coupon = require("../models/Coupon");
+const Notification = require("../models/Notification");
 const mongoose = require("mongoose");
 const { Parser } = require("json2csv");
 const { sendSuccess, sendPaginated } = require("../utils/response");
@@ -232,11 +233,11 @@ exports.toggleUserStatus = catchAsync(async (req, res) => {
 
 exports.createUser = catchAsync(async (req, res) => {
   const { name, phone, email, password, role } = req.body;
-  
+
   if (!name || !phone || !role) {
     throw new AppError("Name, phone, and role are required", 400);
   }
-  
+
   const existingUser = await User.findOne({ phone });
   if (existingUser) {
     throw new AppError("A user with this phone number already exists", 400);
@@ -264,7 +265,7 @@ exports.createUser = catchAsync(async (req, res) => {
 
 exports.updateUser = catchAsync(async (req, res) => {
   const { name, phone, email, password, role } = req.body;
-  
+
   const user = await User.findById(req.params.id);
   if (!user) throw new AppError("User not found", 404);
 
@@ -343,12 +344,45 @@ exports.createCoupon = catchAsync(async (req, res) => {
 
   try {
     const { sendMulticastPush } = require("../services/fcm.service");
-    // Get all active users with FCM tokens
-    const users = await User.find({ isActive: true, fcmTokens: { $exists: true, $not: { $size: 0 } } });
-    const allTokens = users.flatMap(u => u.fcmTokens);
+    const users = await User.find(
+      { isActive: true, role: "customer" },
+      { fcmTokens: 1 }
+    );
+
+    const discountText = data.discountType === "percent"
+      ? `${data.discountValue}%`
+      : `Rs. ${data.discountValue}`;
+
+    const { emitCustomerNotification } = require("..\/config\/socket");
+
+    const notifications = await Notification.insertMany(
+      users.map((u) => ({
+        user: u._id,
+        title: "New Offer Unlocked!",
+        body: `Use code ${coupon.code} to get ${discountText} off on your next order!`,
+        type: "promo",
+        data: {
+          type: "promo_code",
+          couponId: String(coupon._id),
+        },
+        sentVia: ["in_app"],
+      })),
+      { ordered: false }
+    );
+
+    for (const notification of notifications) {
+      emitCustomerNotification(notification.user, notification);
+    }
+
+    const allTokens = users.flatMap((u) => u.fcmTokens || []).filter(Boolean);
+
     if (allTokens.length > 0) {
-      const discountText = data.discountType === "percent" ? `${data.discountValue}%` : `Rs. ${data.discountValue}`;
-      await sendMulticastPush(allTokens, "New Offer Unlocked! 🎉", `Use code ${coupon.code} to get ${discountText} off on your next order!`, { type: "promo_code", couponId: String(coupon._id) });
+      await sendMulticastPush(
+        allTokens,
+        "New Offer Unlocked!",
+        `Use code ${coupon.code} to get ${discountText} off on your next order!`,
+        { type: "promo_code", couponId: String(coupon._id) }
+      );
     }
   } catch (error) {
     require("../utils/logger").logger.error(`[Coupon Push] Failed to send coupon notification: ${error.message}`);

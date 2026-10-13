@@ -1,4 +1,3 @@
-import React from 'react';
 import { UnifiedLoginPage } from '@shared/auth';
 import api from '@/api/axios';
 import { useAuthStore } from '@/store/authStore';
@@ -11,6 +10,8 @@ export default function LoginPage() {
     <UnifiedLoginPage
       api={api}
       currentUser={currentUser}
+      expectedRole="admin"
+      authApp="admin"
       onAuthSuccess={(user, accessToken, refreshToken) => {
         setAuth(user, accessToken, refreshToken);
       }}

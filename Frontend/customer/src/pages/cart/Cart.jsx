@@ -114,6 +114,11 @@ export default function Cart() {
                 {/* Item details */}
                 <div className="flex-1 min-w-0">
                   <p className="font-display text-sm text-foreground truncate">{item.name}</p>
+                    {item.variantName && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {item.variantName}
+                      </p>
+                    )}
 
                   {/* Special instructions */}
                   {item.specialInstructions && (

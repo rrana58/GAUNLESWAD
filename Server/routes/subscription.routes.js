@@ -30,7 +30,7 @@ router.get(
   "/admin",
   protect, restrictTo("admin"),
   [
-    query("status").optional().isIn(["pending","active","paused","expired","cancelled"]),
+    query("status").optional({ values: "falsy" }).isIn(["pending","active","paused","expired","cancelled"]),
     query("planId").optional().isMongoId(),
     query("page").optional().isInt({ min: 1 }),
     query("limit").optional().isInt({ min: 1, max: 50 }),

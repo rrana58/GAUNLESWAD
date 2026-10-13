@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
@@ -25,6 +25,7 @@ const ReviewsPage = lazy(() => import('@/pages/reviews/ReviewsPage'))
 const AnnouncementsPage = lazy(() => import('@/pages/announcements/AnnouncementsPage'))
 const JobsPage = lazy(() => import('@/pages/jobs/JobsPage'))
 const JobApplicationsPage = lazy(() => import('@/pages/jobs/JobApplicationsPage'))
+const ProblemReportsPage = lazy(() => import('@/pages/problem-reports/ProblemReportsPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,19 +39,23 @@ const queryClient = new QueryClient({
 function ProtectedRoute({ children }) {
   const { isAuthenticated, user } = useAuthStore()
 
+  useEffect(() => {
+    if (isAuthenticated && user && user.role !== 'admin') {
+      const targetUrl = getRoleRedirectUrl(user.role)
+      window.location.href = targetUrl
+    }
+  }, [isAuthenticated, user])
+
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />
   }
 
   if (user.role !== 'admin') {
-    const targetUrl = getRoleRedirectUrl(user.role)
-    window.location.href = targetUrl
     return null
   }
 
   return children
 }
-
 function PageFallback() {
   return (
     <div className="flex h-full min-h-[50vh] items-center justify-center bg-background">
@@ -87,6 +92,7 @@ export default function App() {
               <Route path="announcements" element={<AnnouncementsPage />} />
               <Route path="jobs" element={<JobsPage />} />
               <Route path="jobs/applications" element={<JobApplicationsPage />} />
+              <Route path="problem-reports" element={<ProblemReportsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="users" element={<UsersPage />} />
               <Route path="settings" element={<SettingsPage />} />

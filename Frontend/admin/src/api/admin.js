@@ -67,6 +67,8 @@ export const updateJob = (id, data) => api.patch(`/jobs/${id}`, data)
 export const deleteJob = (id) => api.delete(`/jobs/${id}`)
 export const getJobApplications = (params) => api.get('/jobs/applications', { params })
 export const updateJobApplicationStatus = (id, status) => api.patch(`/jobs/applications/${id}`, { status })
+export const getProblemReports = (params) => api.get('/problem-reports', { params })
+export const updateProblemReportStatus = (id, status) => api.patch(`/problem-reports/${id}`, { status })
 
 // Notifications
 export const sendBroadcast = (data) => api.post('/notifications/broadcast', data)

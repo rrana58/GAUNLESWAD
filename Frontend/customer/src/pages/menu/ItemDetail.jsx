@@ -27,14 +27,22 @@ export default function ItemDetail() {
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
 
+  const selectedVariant = useMemo(() => item?.variants?.find((v) => v._id === selectedVariantId) || null, [item, selectedVariantId])
+
   const unitPrice = useMemo(() => {
+    if (selectedVariant) {
+      return selectedVariant.discountedPrice ?? selectedVariant.price ?? 0
+    }
+
     return item?.discountedPrice ?? item?.basePrice ?? 0
-  }, [item])
+  }, [item, selectedVariant])
 
   const handleAddToCart = () => {
     addItem({
       menuItemId: item._id,
       name: item.name,
+      variantId: selectedVariant?._id || undefined,
+      variantName: selectedVariant?.name || undefined,
       price: unitPrice,
       image: item.image?.url,
       quantity,
@@ -65,6 +73,9 @@ export default function ItemDetail() {
   }
 
   const isOutOfStock = item.stockQuantity != null && item.stockQuantity <= 0
+  const availableVariants = item.variants?.filter((v) => v.isAvailable) || []
+  const requiresVariant = availableVariants.length > 0
+  const cannotAddToCart = isOutOfStock || (requiresVariant && !selectedVariantId)
 
   return (
     <div className="pb-28">
@@ -182,6 +193,46 @@ export default function ItemDetail() {
           </div>
         )}
 
+        {/* Variants */}
+        {item.variants?.filter((v) => v.isAvailable).length > 0 && (
+          <div className="mt-5">
+            <h2 className="font-display text-sm text-foreground mb-2">
+              Choose an option
+            </h2>
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Choose an option">
+              {item.variants
+                .filter((v) => v.isAvailable)
+                .map((variant) => (
+                  <label
+                    key={variant._id}
+                    className={cn(
+                      'flex items-center justify-between border px-3 py-3 cursor-pointer transition-colors',
+                      selectedVariantId === variant._id
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border bg-card'
+                    )}
+                    style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
+                  >
+                    <span className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="menu-item-variant"
+                        value={variant._id}
+                        checked={selectedVariantId === variant._id}
+                        onChange={() => setSelectedVariantId(variant._id)}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm font-medium">{variant.name}</span>
+                    </span>
+                    <span className="text-sm font-semibold">
+                      {formatNpr(variant.discountedPrice ?? variant.price)}
+                    </span>
+                  </label>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* Special instructions */}
         <div className="mt-5">
           <h2 className="font-display text-sm text-foreground mb-2">
@@ -261,7 +312,7 @@ export default function ItemDetail() {
         {/* Add to cart CTA */}
         <button
           onClick={handleAddToCart}
-          disabled={isOutOfStock}
+          disabled={cannotAddToCart}
           aria-label={`Add ${quantity} ${item.name} to cart for ${formatNpr(unitPrice * quantity)}`}
           className="flex-1 bg-primary text-primary-foreground py-3 text-sm font-semibold disabled:opacity-40 active:scale-[0.98] transition-transform gs-focus-ring"
           style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}

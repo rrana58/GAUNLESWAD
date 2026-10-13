@@ -8,5 +8,9 @@ export const cancelOrder = (id, reason) =>
   api.patch(`/orders/${id}/cancel`, { reason })
 export const editOrder = (id, data) =>
   api.patch(`/orders/${id}/edit`, data)
+export const settleOrderRefund = (id) =>
+  api.patch(`/orders/${id}/refund/settle`)
+export const assignRider = (id, riderId) =>
+  api.patch(`/orders/${id}/assign-rider`, { riderId })
 export const exportOrders = () =>
   api.get('/admin/export/orders', { responseType: 'blob' })

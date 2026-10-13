@@ -7,19 +7,19 @@ const { getTodayNP } = require("../utils/nepaliTime");
 const { recordActivity } = require("../utils/auditLog");
 
 // Subscriptions are paid upfront for a full month, not collected at a single
-// delivery moment — so "cash on delivery" isn't a valid option here, unlike
+// delivery moment â€” so "cash on delivery" isn't a valid option here, unlike
 // for regular food orders. Exported so the route validator uses the exact
 // same list instead of a second hand-maintained copy that can drift.
 const ALLOWED_SUBSCRIPTION_PAYMENT_METHODS = ["khalti", "esewa", "bank_transfer", "cash"];
 exports.ALLOWED_SUBSCRIPTION_PAYMENT_METHODS = ALLOWED_SUBSCRIPTION_PAYMENT_METHODS;
 
-// ─── Customer ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Customer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 exports.subscribe = catchAsync(async (req, res) => {
   const { planId, payment, meals } = req.body;
   const customerId = req.user._id;
 
-  // Defense-in-depth: don't rely solely on the route validator for this —
+  // Defense-in-depth: don't rely solely on the route validator for this â€”
   // a future route refactor that forgets it must not silently reopen COD.
   if (!payment?.method || !ALLOWED_SUBSCRIPTION_PAYMENT_METHODS.includes(payment.method))
     throw new AppError(
@@ -108,10 +108,10 @@ exports.cancelMySubscription = catchAsync(async (req, res) => {
   sendSuccess(res, {}, "Subscription cancelled");
 });
 
-// ─── Admin ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 exports.listSubscriptionsAdmin = catchAsync(async (req, res) => {
-  // FIX: parse page/limit as integers — query strings are always strings,
+  // FIX: parse page/limit as integers â€” query strings are always strings,
   // so arithmetic like (page - 1) * limit produces NaN without parseInt
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(50, parseInt(req.query.limit) || 20);
@@ -173,7 +173,7 @@ exports.confirmSubscription = catchAsync(async (req, res) => {
     }
   }
 
-  // TODO: SMS via Sparrow — "Your [plan.name] subscription is active until [endDate]"
+  // TODO: SMS via Sparrow â€” "Your [plan.name] subscription is active until [endDate]"
   sendSuccess(res, { subscription: sub }, "Subscription activated");
 });
 
@@ -190,7 +190,7 @@ exports.updateSubscriptionStatus = catchAsync(async (req, res) => {
   await sub.save();
   await recordActivity(
     req, "SUBSCRIPTION_STATUS_UPDATE",
-    `Subscription ${sub._id} status changed ${previousStatus} → ${status}`
+    `Subscription ${sub._id} status changed ${previousStatus} â†’ ${status}`
   );
   sendSuccess(res, { subscription: sub }, `Subscription ${status}`);
 });
@@ -216,7 +216,7 @@ exports.getSubscriptionStats = catchAsync(async (req, res) => {
   sendSuccess(res, { statusBreakdown, planBreakdown, recentPending });
 });
 
-// ─── Helpers called from order controller ────────────────────────────────────
+// â”€â”€â”€ Helpers called from order controller â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * ATOMIC claim bulk: combines eligibility check + reservation into a single
@@ -225,11 +225,13 @@ exports.getSubscriptionStats = catchAsync(async (req, res) => {
  *
  * Returns { claimed: 0 } or { claimed: number, subscription, claimedDate, usageIds: ObjectId[] }
  */
-exports.claimMealsAtomic = async (customerId, menuItemId, requestedQty) => {
+exports.claimMealsAtomic = async (customerId, menuItemId, requestedQty, dbSession = null) => {
   if (!customerId || requestedQty <= 0) return { claimed: 0 };
 
-  const sub = await Subscription.findOne({ customer: customerId, status: "active" })
+  const subQuery = Subscription.findOne({ customer: customerId, status: "active" })
     .populate("plan", "items pricingOptions");
+  if (dbSession) subQuery.session(dbSession);
+  const sub = await subQuery;
   if (!sub || !sub.plan || !sub.isItemInPlan(menuItemId, sub.plan.items)) return { claimed: 0 };
 
   const remaining = sub.maxMeals - sub.mealsUsed;
@@ -256,7 +258,7 @@ exports.claimMealsAtomic = async (customerId, menuItemId, requestedQty) => {
       $inc: { mealsUsed: toClaim },
       $push: { mealUsages: { $each: newUsages } },
     },
-    { new: true }
+    { new: true, ...(dbSession ? { session: dbSession } : {}) }
   );
 
   if (!updated) return { claimed: 0 };
@@ -272,27 +274,65 @@ exports.claimMealsAtomic = async (customerId, menuItemId, requestedQty) => {
 /**
  * Patch the reserved mealUsages entries with the real order id once saved.
  */
-exports.confirmMealUsages = async (subscriptionId, usageIds, orderId) => {
+exports.confirmMealUsages = async (subscriptionId, usageIds, orderId, dbSession = null) => {
   if (!usageIds || usageIds.length === 0) return;
   await Subscription.updateOne(
     { _id: subscriptionId },
     { $set: { "mealUsages.$[elem].order": orderId } },
-    { arrayFilters: [{ "elem._id": { $in: usageIds } }] }
+    { arrayFilters: [{ "elem._id": { $in: usageIds } }], ...(dbSession ? { session: dbSession } : {}) }
   );
 };
 
 /**
  * Roll back claimed slots if order creation ultimately fails.
  */
-exports.releaseMealUsages = async (subscriptionId, usageIds) => {
+exports.releaseMealUsages = async (subscriptionId, usageIds, dbSession = null) => {
   if (!usageIds || usageIds.length === 0) return;
   await Subscription.updateOne(
     { _id: subscriptionId },
     { 
       $pull: { mealUsages: { _id: { $in: usageIds }, order: null } },
       $inc: { mealsUsed: -usageIds.length }
-    }
+    },
+    dbSession ? { session: dbSession } : {}
   );
+};
+
+/**
+ * Release subscription meal usages that were already confirmed against an order.
+ * Used when replacing/removing subscription-covered items from an existing order.
+ */
+exports.releaseConfirmedMealUsages = async (subscriptionId, usageIds, orderId, dbSession = null) => {
+  if (!subscriptionId || !orderId || !usageIds || usageIds.length === 0) return 0;
+
+  const subQuery = Subscription.findOne({
+    _id: subscriptionId,
+    "mealUsages._id": { $in: usageIds },
+  });
+  if (dbSession) subQuery.session(dbSession);
+  const sub = await subQuery;
+
+  if (!sub) return 0;
+
+  const matchingIds = sub.mealUsages
+    .filter(
+      (usage) =>
+        usageIds.some((id) => id.toString() === usage._id.toString()) &&
+        usage.order?.toString() === orderId.toString()
+    )
+    .map((usage) => usage._id);
+
+  if (matchingIds.length === 0) return 0;
+
+  await Subscription.updateOne(
+    { _id: subscriptionId },
+    {
+      $pull: { mealUsages: { _id: { $in: matchingIds } } },
+      $inc: { mealsUsed: -matchingIds.length },
+    },
+    dbSession ? { session: dbSession } : {}
+  );
+  return matchingIds.length;
 };
 
 /**

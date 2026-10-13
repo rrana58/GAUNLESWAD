@@ -4,9 +4,10 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format, addDays, addHours, isBefore } from 'date-fns'
 import { getCelebrationPackages, placeCelebrationOrder } from '@/api/celebrations'
-import { ordersApi } from '@/api/orders'
+import { ordersApi, addressApi } from '@/api/orders'
 import { useAuthStore } from '@/store/authStore'
 import { ChevronLeft, Calendar, Clock, MapPin, Loader2, Plus, Minus, Info, Gift, CheckCircle2, ChevronRight } from 'lucide-react'
+import LocationPicker from '@/components/addresses/LocationPicker'
 
 export default function CelebrationsPage() {
   const navigate = useNavigate()
@@ -49,8 +50,9 @@ export default function CelebrationsPage() {
   const [eventDate, setEventDate] = useState('')
   const [eventTime, setEventTime] = useState('')
   const [address, setAddress] = useState({
-    street: '', area: '', city: 'Kathmandu', landmark: ''
+    street: '', area: '', city: 'Kathmandu', landmark: '', coordinates: null
   })
+  const [showMap, setShowMap] = useState(false)
   
   const minDate = format(new Date(), 'yyyy-MM-dd')
   const maxDate = format(addDays(new Date(), 7), 'yyyy-MM-dd')
@@ -407,6 +409,7 @@ export default function CelebrationsPage() {
         <h3 className="font-display font-semibold mb-4 flex items-center gap-2 text-gray-900">
           <MapPin size={18} className="text-purple-500" /> Delivery Location
         </h3>
+          <div className="mb-4"><button type="button" onClick={() => setShowMap(true)} className="w-full rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm font-semibold text-purple-700">{address.coordinates ? "Change location on map" : "Choose location on map"}</button>{showMap && <LocationPicker initialPosition={address.coordinates} onConfirm={async ({ lat, lng }) => { try { const { data } = await addressApi.reverseGeocode(lat, lng); setAddress((current) => ({ ...current, street: data.address.street || current.street, area: data.address.area || current.area, city: data.address.city || current.city, landmark: data.address.landmark || current.landmark, coordinates: { lat, lng } })); setShowMap(false); toast.success('Location selected') } catch { setAddress((current) => ({ ...current, coordinates: { lat, lng } })); toast.error('Could not fetch address details') } }} />}</div>
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Street Address *</label>

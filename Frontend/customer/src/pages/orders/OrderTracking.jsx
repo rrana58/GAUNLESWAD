@@ -1,15 +1,16 @@
-import { useEffect, useState, useCallback, useId } from 'react'
+﻿import { useEffect, useState, useCallback, useId } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { X, CheckCircle2 } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import { useActiveOrderStore } from '@/store/activeOrderStore'
-import { getSocket, connectSocket } from '@/lib/socket'
+import { connectSocket } from '@/lib/socket'
 import { getErrorMessage } from '@/lib/errorMessage'
 import { formatNpr } from '@/lib/utils'
 import PageHeader from '@/components/layout/PageHeader'
 import StatusTimeline from '@/components/orders/StatusTimeline'
 import RateOrderCard from '@/components/orders/RateOrderCard'
+import CustomerRiderMap from '@/components/orders/CustomerRiderMap'
 
 
 const isMongoId = (v) => /^[0-9a-f]{24}$/.test(v)
@@ -86,7 +87,7 @@ export default function OrderTracking() {
 
   const handleCancel = async () => {
     if (!isMongoId(ref)) {
-      toast.error("Guest orders can't be cancelled here — please contact us directly.")
+      toast.error("Guest orders can't be cancelled here Ã¢â‚¬â€ please contact us directly.")
       return
     }
     setCancelling(true)
@@ -102,7 +103,7 @@ export default function OrderTracking() {
     }
   }
 
-  // ── Loading state ────────────────────────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Loading state Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   if (loading) {
     return (
       <div className="min-h-dvh flex flex-col">
@@ -121,7 +122,7 @@ export default function OrderTracking() {
     )
   }
 
-  // ── Not found state ──────────────────────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Not found state Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   if (notFound || !order) {
     return (
       <div className="min-h-dvh flex flex-col">
@@ -153,7 +154,7 @@ export default function OrderTracking() {
 
       <main className="flex-1 px-4 py-4 flex flex-col gap-6">
 
-        {/* ── Order placed confirmation ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Order placed confirmation Ã¢â€â‚¬Ã¢â€â‚¬ */}
         {justPlaced && (
           <section
             className="flex flex-col items-center gap-1.5 border border-accent/30 bg-accent/10 p-4 text-center"
@@ -165,7 +166,7 @@ export default function OrderTracking() {
             <p className="text-sm font-semibold text-foreground">Order placed!</p>
             {isGuest && trackingToken && (
               <p className="text-xs text-muted-foreground">
-                Save this tracking link — you'll need it since you checked out as a guest:
+                Save this tracking link Ã¢â‚¬â€ you'll need it since you checked out as a guest:
                 <br />
                 <span className="font-mono text-foreground">/track/{trackingToken}</span>
               </p>
@@ -173,13 +174,15 @@ export default function OrderTracking() {
           </section>
         )}
 
-        {/* ── Status timeline ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Status timeline Ã¢â€â‚¬Ã¢â€â‚¬ */}
         <section aria-labelledby={timelineId}>
           <h2 id={timelineId} className="sr-only">Order status</h2>
           <StatusTimeline status={order.status} />
         </section>
 
-        {/* ── Celebration details ── */}
+        <CustomerRiderMap order={order} />
+
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Celebration details Ã¢â€â‚¬Ã¢â€â‚¬ */}
         {order.orderType === 'celebration' && order.celebrationDetails && (
           <section
             aria-labelledby={celebrationId}
@@ -190,7 +193,7 @@ export default function OrderTracking() {
               id={celebrationId}
               className="font-display text-sm font-semibold text-foreground mb-2"
             >
-              🎉 Celebration Details
+              Ã°Å¸Å½â€° Celebration Details
             </h2>
             <div className="space-y-1.5 text-sm text-muted-foreground">
               <div className="flex justify-between">
@@ -229,7 +232,7 @@ export default function OrderTracking() {
           </section>
         )}
 
-        {/* ── Rating ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Rating Ã¢â€â‚¬Ã¢â€â‚¬ */}
         {order.status === 'delivered' && isMongoId(ref) && (
           order.rating?.food ? (
             <section
@@ -239,8 +242,8 @@ export default function OrderTracking() {
             >
               <h2 id={ratingId} className="sr-only">Your rating</h2>
               <p className="text-sm font-medium text-foreground">
-                You rated this order {order.rating.food}★
-                {order.rating.delivery ? ` (delivery ${order.rating.delivery}★)` : ''}
+                You rated this order {order.rating.food}Ã¢Ëœâ€¦
+                {order.rating.delivery ? ` (delivery ${order.rating.delivery}Ã¢Ëœâ€¦)` : ''}
               </p>
               {order.rating.comment && (
                 <p className="text-sm text-muted-foreground mt-1">"{order.rating.comment}"</p>
@@ -254,7 +257,7 @@ export default function OrderTracking() {
           )
         )}
 
-        {/* ── Items ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Items Ã¢â€â‚¬Ã¢â€â‚¬ */}
         <section aria-labelledby={itemsId}>
           <h2 id={itemsId} className="font-display text-sm text-foreground mb-2">
             Items
@@ -263,7 +266,7 @@ export default function OrderTracking() {
             {order.items.map((item, i) => (
               <li key={i} role="listitem" className="flex justify-between text-sm">
                 <span className="text-foreground">
-                  {item.quantity}× {item.menuItem?.name || item.name}
+                {item.quantity}{"\u00D7"} {item.menuItem?.name || item.name}
                 </span>
                 <span
                   className="font-mono text-muted-foreground"
@@ -276,7 +279,7 @@ export default function OrderTracking() {
           </ol>
         </section>
 
-        {/* ── Order summary ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Order summary Ã¢â€â‚¬Ã¢â€â‚¬ */}
         <section
           aria-labelledby={summaryId}
           className="flex flex-col gap-1.5 text-sm"
@@ -320,7 +323,7 @@ export default function OrderTracking() {
           </div>
         </section>
 
-        {/* ── Delivery address ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Delivery address Ã¢â€â‚¬Ã¢â€â‚¬ */}
         {order.deliveryType === 'delivery' && order.deliveryAddress && (
           <section aria-labelledby={addressId}>
             <h2 id={addressId} className="font-display text-sm text-foreground mb-1">
@@ -334,17 +337,17 @@ export default function OrderTracking() {
           </section>
         )}
 
-        {/* ── Payment ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Payment Ã¢â€â‚¬Ã¢â€â‚¬ */}
         <section aria-labelledby={paymentId}>
           <h2 id={paymentId} className="font-display text-sm text-foreground mb-1">
             Payment
           </h2>
           <p className="text-sm text-muted-foreground capitalize">
-            {order.paymentMethod} · {order.paymentStatus}
+                {order.paymentMethod}{"\u00B7"} {order.paymentStatus}
           </p>
         </section>
 
-        {/* ── Cancel ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Cancel Ã¢â€â‚¬Ã¢â€â‚¬ */}
         {isCancellable && (
           <button
             type="button"

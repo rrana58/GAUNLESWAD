@@ -31,8 +31,7 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        enabled: true,
-        type: 'module',
+        enabled: false,
       },
       workbox: {
         navigateFallbackDenylist: [/^\/admin/, /^\/kitchen/, /^\/rider/, /^\/api/],

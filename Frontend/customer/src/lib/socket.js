@@ -26,7 +26,12 @@ export function getSocket() {
 
 export function connectSocket() {
   const s = getSocket()
-  if (!s.connected) s.connect()
+  if (!s.connected) {
+    s.connect()
+    s.once('connect', () => {
+      s.emit('join:customer')
+    })
+  }
   return s
 }
 

@@ -25,7 +25,7 @@ attachSingleFlightRefresh(api, {
     useAuthStore.getState().setAuth(user, data.accessToken, data.refreshToken)
   },
   onRefreshFailed: () => useAuthStore.getState().logout?.(),
-  loginPath: '/login',
+  loginPath: '/admin/login',
   storageKey: 'gharko-admin-auth',
 })
 

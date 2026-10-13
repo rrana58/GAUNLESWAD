@@ -10,7 +10,7 @@ const base = () => ({
   name: "Khaja Time",
   displayName: "Khaja Time Deals",
   discountPercent: 20,
-  items: [new mongoose.Types.ObjectId()],
+  items: [{ menuItem: new mongoose.Types.ObjectId() }],
   activeDate: "2026-06-26",
   startHour: 12,
   endHour: 16,

@@ -34,8 +34,8 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string().min(1, "CLOUDINARY_API_SECRET is required"),
 
   // ─── SMS ───────────────────────────────────────────────────────────────────
-  SPARROW_TOKEN: z.string().min(1, "SPARROW_TOKEN is required"),
-  SPARROW_SENDER: z.string().min(1, "SPARROW_SENDER is required"),
+  SPARROW_SMS_TOKEN: z.string().min(1, "SPARROW_SMS_TOKEN is required"),
+  SPARROW_SMS_FROM: z.string().min(1, "SPARROW_SMS_FROM is required"),
 
   // ─── Firebase ──────────────────────────────────────────────────────────────
   FIREBASE_PROJECT_ID: z.string().min(1, "FIREBASE_PROJECT_ID is required"),

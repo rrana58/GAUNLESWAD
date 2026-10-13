@@ -13,6 +13,7 @@ import OrderTracking from '@/pages/orders/OrderTracking'
 import OrderHistory from '@/pages/orders/OrderHistory'
 import Subscriptions from '@/pages/subscriptions/Subscriptions'
 import Profile from '@/pages/profile/Profile'
+import Notifications from '@/pages/notifications/Notifications'
 import More from '@/pages/more/More'
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
@@ -20,6 +21,8 @@ import ForgotPassword from '@/pages/auth/ForgotPassword'
 import Terms from '@/pages/legal/Terms'
 import Privacy from '@/pages/legal/Privacy'
 import ShowcasePage from '@/pages/ShowcasePage'
+import KhaltiCallback from '@/pages/payment/KhaltiCallback'
+import EsewaCallback from '@/pages/payment/EsewaCallback'
 
 export default function App() {
   return (
@@ -31,6 +34,11 @@ export default function App() {
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/showcase" element={<ShowcasePage />} />
+
+      {/* Payment gateway callbacks */}
+      <Route path="/payment/khalti/verify" element={<KhaltiCallback />} />
+      <Route path="/payment/esewa/success" element={<EsewaCallback />} />
+      <Route path="/payment/esewa/failure" element={<EsewaCallback />} />
 
       {/* Everything else sits inside the mobile shell (top bar + bottom nav) */}
       <Route element={<MobileShell />}>
@@ -48,6 +56,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/orders" element={<OrderHistory />} />
           <Route path="/profile" element={<Profile />} />
+      <Route path="/notifications" element={<Notifications />} />
         </Route>
       </Route>
 

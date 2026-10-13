@@ -6,7 +6,7 @@ import { useOrderNotifications } from '@/hooks/useOrderNotifications'
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Ticket,
   CalendarX, Settings, Users, BarChart3, Clock, CreditCard,
-  LogOut, Menu, Star, Bell, BellOff, Megaphone, Briefcase, Gift
+  LogOut, Menu, Star, Bell, BellOff, Megaphone, Briefcase, Gift, AlertTriangle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -68,6 +68,7 @@ const navItems = [
   { to: '/reviews', icon: Star, label: 'Reviews' },
   { to: '/announcements', icon: Megaphone, label: 'Announcements' },
   { to: '/jobs', icon: Briefcase, label: 'Jobs' },
+  { to: '/problem-reports', icon: AlertTriangle, label: 'Problem Reports' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/users', icon: Users, label: 'Users' },
   { to: '/settings', icon: Settings, label: 'Settings' },
@@ -151,7 +152,7 @@ export default function AdminLayout() {
                       : { borderRadius: 'var(--gs-admin-radius-lg)' }
                   }
                 >
-                  {({ isActive }) => (
+                  {() => (
                     <>
                       <span className="relative shrink-0">
                         <Icon size={18} aria-hidden="true" />

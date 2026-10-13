@@ -12,18 +12,22 @@ import { useNavigate } from 'react-router-dom'
 
 export default function ItemDetailModal() {
   const navigate = useNavigate()
-  const { selectedItemId, isOpen, closeModal } = useItemModalStore()
+  const { selectedItemId, selectedItem, isOpen, closeModal } = useItemModalStore()
   const addItem = useCartStore((s) => s.addItem)
   const dialogRef = useRef(null)
 
-  const { data: item, isLoading } = useQuery({
+  const { data: fetchedItem, isLoading: isFetchingItem } = useQuery({
     queryKey: ['menu-item', selectedItemId],
     queryFn: () => menuApi.getItem(selectedItemId).then((r) => r.data.item),
-    enabled: !!selectedItemId && isOpen,
+    enabled: !!selectedItemId && isOpen && !selectedItem,
   })
+
+  const item = selectedItem || fetchedItem
+  const isLoading = !selectedItem && isFetchingItem
 
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
+  const [selectedVariantId, setSelectedVariantId] = useState(null)
   const [prevItemId, setPrevItemId] = useState(selectedItemId)
 
   // Reset state when a new item is opened (render phase update)
@@ -31,6 +35,7 @@ export default function ItemDetailModal() {
     setPrevItemId(selectedItemId)
     setQuantity(1)
     setNotes('')
+    setSelectedVariantId(null)
   }
 
   // Move focus into the dialog on open for keyboard/SR users
@@ -48,19 +53,22 @@ export default function ItemDetailModal() {
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, closeModal])
 
+  const selectedVariant = useMemo(() => item?.variants?.find((v) => v._id === selectedVariantId) || null, [item, selectedVariantId])
+
   const unitPrice = useMemo(() => {
+    if (selectedVariant) {
+      return selectedVariant.discountedPrice ?? selectedVariant.price ?? 0
+    }
+
     return item?.discountedPrice ?? item?.basePrice ?? 0
-  }, [item])
-
-  const rawUnitPrice = useMemo(() => {
-    return item?.basePrice ?? 0
-  }, [item])
-
+  }, [item, selectedVariant])
   const handleAddToCart = () => {
     addItem({
       menuItemId: item._id,
+      variantId: selectedVariant?._id || undefined,
       name: item.name,
-      price: item.discountedPrice ?? item.basePrice ?? rawUnitPrice,
+      variantName: selectedVariant?.name || undefined,
+      price: unitPrice,
       image: item.image?.url,
       quantity,
       specialInstructions: notes.trim() || undefined,
@@ -75,6 +83,9 @@ export default function ItemDetailModal() {
   }
 
   const isOutOfStock = item?.stockQuantity != null && item.stockQuantity <= 0
+  const availableVariants = item?.variants?.filter((v) => v.isAvailable) || []
+  const requiresVariant = availableVariants.length > 0
+  const cannotAddToCart = isOutOfStock || (requiresVariant && !selectedVariantId)
   const headingId = 'item-modal-title'
 
   if (!isOpen) return null
@@ -264,8 +275,69 @@ export default function ItemDetailModal() {
                     </div>
                   </div>
                 )}
+                  {/* Variants */}
+                  {item.variants?.filter((v) => v.isAvailable).length > 0 && (
+                    <div className="mt-5">
+                      <h2 className="font-display text-sm text-foreground mb-2">
+                        Choose an option
+                      </h2>
+                      <div className="flex flex-col gap-2" role="radiogroup" aria-label="Choose an option">
+                        {item.variants
+                          .filter((v) => v.isAvailable)
+                          .map((variant) => (
+                            <label
+                              key={variant._id}
+                              className={cn(
+                                'flex items-center justify-between border px-3 py-3 cursor-pointer transition-colors',
+                                selectedVariantId === variant._id
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border bg-card'
+                              )}
+                              style={{ borderRadius: 'var(--gs-radius-lg, 0.75rem)' }}
+                            >
+                              <span className="flex items-center gap-3">
+                                <input
+                                  type="radio"
+                                  name="modal-menu-item-variant"
+                                  value={variant._id}
+                                  checked={selectedVariantId === variant._id}
+                                  onChange={() => setSelectedVariantId(variant._id)}
+                                  className="accent-primary"
+                                />
+                                <span className="text-sm font-medium">{variant.name}</span>
+                              </span>
+                              <span className="flex items-center gap-2 text-sm">
+                                {variant.discountedPrice != null && variant.discountedPrice < variant.price ? (
+                                  <>
+                                    <span className="font-mono text-xs text-muted-foreground line-through">
+                                      {formatNpr(variant.price)}
+                                    </span>
+                                    <span className="font-mono font-semibold">
+                                      {formatNpr(variant.discountedPrice)}
+                                    </span>
+                                  </>
+                                ) : variant.originalPrice != null && variant.originalPrice > variant.price ? (
+                                  <>
+                                    <span className="font-mono text-xs text-muted-foreground line-through">
+                                      {formatNpr(variant.originalPrice)}
+                                    </span>
+                                    <span className="font-mono font-semibold">
+                                      {formatNpr(variant.price)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="font-mono font-semibold">
+                                    {formatNpr(variant.price)}
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          ))}
+                      </div>
+                    </div>
+                  )}
 
-                {/* Special instructions */}
+
                 <div className="mt-6 mb-2">
                   <h2 className="font-display font-semibold text-base text-foreground mb-3">
                     <label htmlFor="modal-special-instructions">Special instructions</label>
@@ -330,7 +402,7 @@ export default function ItemDetailModal() {
             {/* Add to cart CTA */}
             <button
               onClick={handleAddToCart}
-              disabled={isOutOfStock}
+              disabled={cannotAddToCart}
               aria-label={`Add ${quantity} ${item.name} to cart for ${formatNpr(unitPrice * quantity)}`}
               className="flex-1 rounded-full bg-primary text-primary-foreground py-3.5 text-[15px] font-bold disabled:opacity-40 active:scale-[0.98] transition-transform flex justify-between items-center px-6 gs-focus-ring"
               style={{ boxShadow: 'var(--gs-shadow-md)' }}

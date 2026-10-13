@@ -118,7 +118,7 @@ function CouponModal({ coupon, onClose, onSave }) {
               style={selectStyle}
             >
               <option value="flat">Flat (Rs.)</option>
-              <option value="percentage">Percentage (%)</option>
+              <option value="percent">Percentage (%)</option>
             </select>
           </div>
           <div className="space-y-1.5">
@@ -134,7 +134,7 @@ function CouponModal({ coupon, onClose, onSave }) {
               placeholder={form.discountType === 'flat' ? '50' : '20'}
             />
           </div>
-          {form.discountType === 'percentage' && (
+          {form.discountType === 'percent' && (
             <div className="space-y-1.5">
               <Label htmlFor="max-discount">Max Discount (Rs.)</Label>
               <Input

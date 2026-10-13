@@ -2,6 +2,7 @@
 @import "../../shared/theme/provider.css";
 
 @import "@fontsource-variable/fraunces";
+@import "leaflet/dist/leaflet.css";
 @import "tailwindcss";
 @source "../../shared";
 

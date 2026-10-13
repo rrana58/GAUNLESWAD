@@ -9,21 +9,21 @@ import api from "../utils/axios";
 const STATUS_CONFIG = {
   pending: {
     next: "confirmed",
-    actionLabel: "✓ Confirm Order",
+    actionLabel: "\u2713 Confirm Order",
     actionClass: "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200",
     badge: "bg-blue-100 text-blue-700 border-blue-200",
     badgeLabel: "New Order",
   },
   confirmed: {
     next: "preparing",
-    actionLabel: "🍳 Start Cooking",
+    actionLabel: "\u{1F373} Start Cooking",
     actionClass: "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200",
     badge: "bg-purple-100 text-purple-700 border-purple-200",
     badgeLabel: "Confirmed",
   },
   preparing: {
     next: "ready",
-    actionLabel: "✅ Mark Ready",
+    actionLabel: "\u2713 Mark Ready",
     actionClass: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200",
     badge: "bg-amber-100 text-amber-700 border-amber-200",
     badgeLabel: "Cooking...",
@@ -33,11 +33,11 @@ const STATUS_CONFIG = {
     actionLabel: null,
     actionClass: "",
     badge: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    badgeLabel: "Ready ✓",
+    badgeLabel: "Ready \u2713",
   },
 };
 
-export default function OrderCard({ order, onStatusChange, onCancelOrder, onEditItems }) {
+export default function OrderCard({ order, onStatusChange, onCancelOrder, onEditItems, riders }) {
   const [expanded, setExpanded] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showBill, setShowBill] = useState(false);
@@ -56,6 +56,8 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
   const [pickerVariantId, setPickerVariantId] = useState(null);
   const [pickerAddonIds, setPickerAddonIds] = useState([]);
   const [pickerQty, setPickerQty] = useState(1);
+  const [selectedRiderId, setSelectedRiderId] = useState("");
+  const [assigningRider, setAssigningRider] = useState(false);
 
   const waitMinutes = Math.floor((new Date() - new Date(order.createdAt)) / 60000);
   let timerClass = "bg-emerald-100 text-emerald-700";
@@ -74,6 +76,27 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
 
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.ready;
 
+  const handleAssignRider = async () => {
+    if (!selectedRiderId || assigningRider) return;
+
+    setAssigningRider(true);
+
+    try {
+      const { data } = await api.patch(
+        `/orders/${order._id}/assign-rider`,
+        { riderId: selectedRiderId }
+      );
+
+      toast.success(data?.message || "Rider assigned successfully");
+      setSelectedRiderId("");
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Failed to assign rider"
+      );
+    } finally {
+      setAssigningRider(false);
+    }
+  };
   const handleAction = async () => {
     if (!cfg.next || loading) return;
     setLoading(true);
@@ -122,7 +145,7 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
     }
   };
 
-  // Debounced live search against the backend — scales to any menu size
+  // Debounced live search against the backend ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â scales to any menu size
   // instead of relying on a capped client-side list.
   const pickerSearchTimer = useRef(null);
   useEffect(() => {
@@ -172,7 +195,7 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
 
   const handleSaveItems = async () => {
     if (draftItems.length === 0 && pendingAddItems.length === 0) {
-      toast.error("An order must have at least one item — cancel the order instead");
+      toast.error("An order must have at least one item ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â cancel the order instead");
       return;
     }
     const changedItems = draftItems
@@ -267,7 +290,7 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
       </div>
     )}
 
-    {/* Edit Items Modal — quantity correction, removal, and adding/swapping items */}
+    {/* Edit Items Modal ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â quantity correction, removal, and adding/swapping items */}
     {showEditItems && (
       <div
         className="fixed inset-0 flex items-center justify-center p-4"
@@ -301,14 +324,14 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
                     <input
                       value={pickerSearch}
                       onChange={(e) => setPickerSearch(e.target.value)}
-                      placeholder="Search menu…"
+                      placeholder="Search menu..."
                       className="w-full border border-border pl-9 pr-3 py-2 text-sm outline-none focus-visible:ring-2"
                       style={{ borderRadius: "var(--gs-admin-radius-lg)" }}
                       autoFocus
                     />
                   </div>
                   {pickerLoading ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">Loading menu…</p>
+                    <p className="text-sm text-muted-foreground text-center py-8">Loading menu...</p>
                   ) : (
                     <ul className="space-y-1.5 max-h-72 overflow-y-auto">
                       {filteredPickerItems.map((item) => (
@@ -396,7 +419,7 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
                       style={{ borderRadius: "var(--gs-admin-radius-md)" }}
                       onClick={() => setPickerQty((q) => Math.max(1, q - 1))}
                     >
-                      −
+                        -
                     </button>
                     <span className="w-5 text-center text-sm font-semibold">{pickerQty}</span>
                     <button
@@ -421,9 +444,9 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
             </>
           ) : (
             <>
-              <h2 className="font-bold text-foreground">Edit Items — {shortNum}</h2>
+              <h2 className="font-bold text-foreground">Edit Items - #{shortNum}</h2>
               <p className="text-xs text-muted-foreground">
-                Adjust quantities, remove items, or add a different dish — priced fresh off the current menu.
+                Adjust quantities, remove items, or add a different dish - priced fresh off the current menu.
               </p>
               <ul className="space-y-2.5">
                 {draftItems.map((item) => (
@@ -450,7 +473,7 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
                         className="w-7 h-7 flex items-center justify-center bg-muted hover:bg-muted/80 text-foreground border border-border gs-kitchen-focus-ring"
                         style={{ borderRadius: "var(--gs-admin-radius-md)" }}
                       >
-                        −
+                        -
                       </button>
                       <span className="w-5 text-center text-sm font-bold">{item.quantity}</span>
                       <button
@@ -559,7 +582,7 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
           role="alert"
         >
           <AlertCircle size={12} aria-hidden="true" />
-          WAITING {formatWaitTime(waitMinutes).toUpperCase()} — URGENT!
+          WAITING {formatWaitTime(waitMinutes).toUpperCase()} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â URGENT!
         </div>
       )}
 
@@ -644,7 +667,7 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
               <div key={idx} className="px-3 py-2 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-foreground leading-snug">
-                    <span className="font-black mr-1" style={{ color: "var(--gs-kitchen-accent)" }}>{item.quantity}×</span>{" "}
+                    <span className="font-black mr-1" style={{ color: "var(--gs-kitchen-accent)" }}>{item.quantity}{"\u00D7"}</span>
                     {item.name}
                   </p>
                   {item.variant && (
@@ -720,7 +743,7 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
             Print Ticket / Bill
           </button>
 
-          {/* Edit / Cancel — corrections made before the order goes out */}
+          {/* Edit / Cancel ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â corrections made before the order goes out */}
           {canEditOrCancel && (
             <div className="flex gap-2">
               <button
@@ -745,12 +768,70 @@ export default function OrderCard({ order, onStatusChange, onCancelOrder, onEdit
           )}
 
           {order.status === "ready" && (
+  <div className="mb-3 border border-border rounded-lg p-3 space-y-2">
+    <div className="flex items-center gap-2">
+      <User size={15} className="text-muted-foreground" aria-hidden="true" />
+      <p className="text-xs font-semibold text-foreground">
+        Rider Assignment
+      </p>
+    </div>
+
+    {order.deliveryPerson && (
+      <p className="text-xs text-muted-foreground">
+        Current rider:{" "}
+        <span className="font-medium text-foreground">
+          {order.deliveryPerson.name}
+        </span>
+        {order.deliveryPerson.phone && (
+          <>{" â€” "}{order.deliveryPerson.phone}</>
+        )}
+      </p>
+    )}
+
+    <div className="flex gap-2">
+      <select
+        value={selectedRiderId}
+        onChange={(e) => setSelectedRiderId(e.target.value)}
+        disabled={assigningRider || !riders?.length}
+        className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+        aria-label="Select rider"
+      >
+        <option value="">Select rider</option>
+        {(riders || []).map((rider) => (
+          <option key={rider._id} value={rider._id}>
+            {rider.name}{rider.phone ? ` â€” ${rider.phone}` : ""}
+          </option>
+        ))}
+      </select>
+
+      <button
+        type="button"
+        onClick={handleAssignRider}
+        disabled={!selectedRiderId || assigningRider || !riders?.length}
+        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+      >
+        {assigningRider
+          ? "Assigning..."
+          : order.deliveryPerson
+            ? "Reassign"
+            : "Assign Rider"}
+      </button>
+    </div>
+
+    {(!riders || riders.length === 0) && (
+      <p className="text-xs text-muted-foreground">
+        No active riders available.
+      </p>
+    )}
+  </div>
+)}
+{order.status === "ready" && (
             <div
               className="w-full py-2.5 font-bold text-xs text-center bg-emerald-50 text-emerald-700 border border-emerald-200"
               role="status"
               style={{ borderRadius: "var(--gs-admin-radius-xl)" }}
             >
-              🎉 Ready for Pickup / Dispatch
+              ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â½ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â° Ready for Pickup / Dispatch
             </div>
           )}
         </div>

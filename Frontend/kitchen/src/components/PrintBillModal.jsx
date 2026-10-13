@@ -48,9 +48,11 @@ export default function PrintBillModal({ order, onClose }) {
     ?? order.items.reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0);
   const deliveryCharge = order.deliveryCharge ?? order.deliveryFee ?? 0;
   const discount = order.discount ?? 0;
+  const couponDiscount = order.couponDiscount ?? 0;
+  const walletDiscount = order.walletDiscount ?? 0;
   const taxableAmount = subtotal - discount;
   const vat = order.tax ?? Math.round(taxableAmount * VAT_RATE * 100) / 100;
-  const total = order.total ?? order.totalAmount ?? (taxableAmount + vat + deliveryCharge);
+  const total = order.totalAmount ?? order.total ?? (taxableAmount + vat + deliveryCharge);
 
   const customerName =
     order.guestInfo?.name || order.customer?.name || "Walk-in Customer";
@@ -188,13 +190,14 @@ export default function PrintBillModal({ order, onClose }) {
           ${itemRows}
 
           <div class="divider"></div>
-          <div class="row"><span>Subtotal</span><span>Rs. ${subtotal.toFixed(2)}</span></div>
-          ${discount > 0 ? `<div class="row"><span>Discount</span><span>- Rs. ${discount.toFixed(2)}</span></div>` : ""}
+          <div class="row"><span>Items subtotal (VAT included)</span><span>Rs. ${subtotal.toFixed(2)}</span></div>
+          ${couponDiscount > 0 ? `<div class="row"><span>Coupon (${order.couponCode || "Discount"})</span><span>- Rs. ${couponDiscount.toFixed(2)}</span></div>` : ""}
+          ${walletDiscount > 0 ? `<div class="row"><span>Wallet/Loyalty discount</span><span>- Rs. ${walletDiscount.toFixed(2)}</span></div>` : ""}
+          ${discount > 0 ? `<div class="row"><span>Other discount</span><span>- Rs. ${discount.toFixed(2)}</span></div>` : ""}
           ${deliveryCharge > 0 ? `<div class="row"><span>Delivery Charge</span><span>Rs. ${deliveryCharge.toFixed(2)}</span></div>` : ""}
-          <div class="row"><span>VAT (13%)</span><span>Rs. ${vat.toFixed(2)}</span></div>
 
           <div class="double"></div>
-          <div class="row total-row"><span>TOTAL</span><span>Rs. ${total.toFixed(2)}</span></div>
+          <div class="row total-row"><span>TOTAL TO PAY</span><span>Rs. ${total.toFixed(2)}</span></div>
           <div class="double"></div>
 
           <div class="row" style="margin-top:4px;"><span>Payment:</span><span class="bold">${(order.paymentMethod || "COD").toUpperCase()}</span></div>
@@ -439,12 +442,24 @@ export default function PrintBillModal({ order, onClose }) {
 
                 <div className="space-y-1 text-[12px]">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">Items subtotal (VAT included)</span>
                     <span>Rs. {subtotal.toFixed(2)}</span>
                   </div>
+                  {couponDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Coupon ({order.couponCode || "Discount"})</span>
+                      <span>- Rs. {couponDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {walletDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Wallet/Loyalty discount</span>
+                      <span>- Rs. {walletDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
                   {discount > 0 && (
                     <div className="flex justify-between text-emerald-700">
-                      <span>Discount</span>
+                      <span>Other discount</span>
                       <span>- Rs. {discount.toFixed(2)}</span>
                     </div>
                   )}
@@ -454,16 +469,10 @@ export default function PrintBillModal({ order, onClose }) {
                       <span>Rs. {deliveryCharge.toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">VAT (13%)</span>
-                    <span>Rs. {vat.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div className="border-t-2 border-foreground my-2" />
+                </div><div className="border-t-2 border-foreground my-2" />
 
                 <div className="flex justify-between font-black text-base">
-                  <span>TOTAL</span>
+                  <span>TOTAL TO PAY</span>
                   <span>Rs. {total.toFixed(2)}</span>
                 </div>
 

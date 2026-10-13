@@ -20,6 +20,17 @@ exports.applyToJob = catchAsync(async (req, res) => {
 
   const { name, phone, message } = req.body;
 
+  if (req.user?._id) {
+    const existingApplication = await JobApplication.findOne({
+      job: job._id,
+      applicant: req.user._id,
+    });
+
+    if (existingApplication) {
+      throw new AppError("You have already applied for this job.", 409);
+    }
+  }
+
   const application = await JobApplication.create({
     job: job._id,
     jobTitle: job.title,
@@ -34,6 +45,16 @@ exports.applyToJob = catchAsync(async (req, res) => {
 
 // ─── Admin — Jobs ─────────────────────────────────────────────────────────────
 
+exports.getMyApplications = catchAsync(async (req, res) => {
+  const applications = await JobApplication.find({
+    applicant: req.user._id,
+  })
+    .select("job jobTitle status createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  sendSuccess(res, { applications });
+});
 exports.listJobs = catchAsync(async (req, res) => {
   const jobs = await Job.find().populate("createdBy", "name phone").sort({ createdAt: -1 });
 
@@ -60,12 +81,45 @@ exports.createJob = catchAsync(async (req, res) => {
 
   try {
     const User = require("../models/User");
+    const Notification = require("../models/Notification");
     const { sendMulticastPush } = require("../services/fcm.service");
-    // Get all active users with FCM tokens
-    const users = await User.find({ isActive: true, fcmTokens: { $exists: true, $not: { $size: 0 } } });
-    const allTokens = users.flatMap(u => u.fcmTokens);
+    const { emitCustomerNotification } = require("../config/socket");
+
+    const users = await User.find(
+      { isActive: true, role: "customer" },
+      { fcmTokens: 1 }
+    );
+
+    const notifications = await Notification.insertMany(
+      users.map((user) => ({
+        user: user._id,
+        title: "We are hiring!",
+        body: `New job opening: ${job.title}. Tap to view and apply!`,
+        type: "system",
+        data: {
+          type: "career_job",
+          jobId: String(job._id),
+        },
+        sentVia: ["in_app"],
+      })),
+      { ordered: false }
+    );
+
+    for (const notification of notifications) {
+      emitCustomerNotification(notification.user, notification);
+    }
+
+    const allTokens = users
+      .flatMap((user) => user.fcmTokens || [])
+      .filter(Boolean);
+
     if (allTokens.length > 0) {
-      await sendMulticastPush(allTokens, "We are hiring! 🚀", `New job opening: ${job.title}. Tap to apply and join our team!`, { type: "career", jobId: String(job._id) });
+      await sendMulticastPush(
+        allTokens,
+        "We are hiring!",
+        `New job opening: ${job.title}. Tap to view and apply!`,
+        { type: "career_job", jobId: String(job._id) }
+      );
     }
   } catch (error) {
     require("../utils/logger").logger.error(`[Job Push] Failed to send job notification: ${error.message}`);
@@ -115,11 +169,69 @@ exports.listApplications = catchAsync(async (req, res) => {
 
 exports.updateApplicationStatus = catchAsync(async (req, res) => {
   const { status } = req.body;
-  const application = await JobApplication.findByIdAndUpdate(
-    req.params.id,
-    { status },
-    { new: true }
-  );
+  const application = await JobApplication.findById(req.params.id);
   if (!application) throw new AppError("Application not found", 404);
+
+  const previousStatus = application.status
+  console.log("[JOB STATUS DEBUG]", { applicationId: String(application._id), applicant: application.applicant ? String(application.applicant) : null, previousStatus, newStatus: status });;
+  application.status = status;
+  await application.save();
+
+  if (previousStatus !== status && application.applicant) {
+    try {
+      const User = require("../models/User");
+      const Notification = require("../models/Notification");
+      const { emitCustomerNotification } = require("../config/socket");
+
+      const applicant = await User.findById(application.applicant).select("fcmTokens");
+
+      const statusLabels = {
+        new: "Application Submitted",
+        reviewed: "Application Reviewed",
+        contacted: "We've Contacted You",
+        rejected: "Position Filled",
+      };
+
+      const notification = await Notification.create({
+        user: application.applicant,
+        title: "Application Status Updated",
+        body: `Your application for ${application.jobTitle} is now ${statusLabels[status] || status}.`,
+        type: "system",
+        data: {
+          type: "career_application_status",
+          applicationId: String(application._id),
+          jobId: String(application.job),
+        },
+        sentVia: ["in_app"],
+      });
+
+      emitCustomerNotification(application.applicant, notification);
+
+      if (applicant?.fcmTokens?.length) {
+        try {
+          const { sendMulticastPush } = require("../services/fcm.service");
+          await sendMulticastPush(
+            applicant.fcmTokens.filter(Boolean),
+            "Application Status Updated",
+            notification.body,
+            {
+              type: "career_application_status",
+              applicationId: String(application._id),
+              jobId: String(application.job),
+            }
+          );
+        } catch (error) {
+          require("../utils/logger").logger.error(
+            `[Job Application Push] Failed to send status notification: ${error.message}`
+          );
+        }
+      }
+    } catch (error) {
+      require("../utils/logger").logger.error(
+        `[Job Application Notification] Failed: ${error.message}`
+      );
+    }
+  }
+
   sendSuccess(res, { application }, "Application updated");
 });

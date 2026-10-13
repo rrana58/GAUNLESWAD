@@ -21,7 +21,7 @@ const orderItemSchema = new mongoose.Schema({
   // Special session discount applied to this item
   sessionDiscount: {
   applied: { type: Boolean, default: false },
-  sessionType: String,  
+  sessionType: String,
   sessionName: String,
   percent: Number,
   savedAmount: Number,
@@ -32,6 +32,8 @@ const orderItemSchema = new mongoose.Schema({
     subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: "Subscription" },
     originalUnitPrice: Number,
     savedAmount: Number,
+    freeQuantity: { type: Number, default: 0 },
+    usageIds: [{ type: mongoose.Schema.Types.ObjectId }],
     note: String,
   },
   // Celebration package reference
@@ -119,15 +121,37 @@ const orderSchema = new mongoose.Schema(
       comment: String,
       ratedAt: Date,
     },
-    trackingToken: { 
-      type: String, 
+    trackingToken: {
+      type: String,
       default: () => uuidv4() },
     cancellationReason: { type: String, maxlength: 500 },
-    
+
     // Notifications Tracking
     reviewNotified: { type: Boolean, default: false },
     cancelReason: String,
     refundAmount: Number,
+
+    paymentAdjustment: {
+      originalPaidAmount: Number,
+      newTotalAmount: Number,
+      refundAmount: { type: Number, default: 0 },
+      additionalPaymentAmount: { type: Number, default: 0 },
+      status: {
+        type: String,
+        enum: ["none", "refund_due", "additional_payment_due", "settled"],
+        default: "none",
+      },
+      refundMethod: {
+        type: String,
+        enum: ["cash"],
+        default: null,
+      },
+      refundSettledAt: Date,
+      refundSettledBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
   },
   { timestamps: true, toJSON: { virtuals: true } }
 );
@@ -142,7 +166,7 @@ orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ orderNumber: 1 }, { unique: true, sparse: true });
 orderSchema.index({ trackingToken: 1 });
 orderSchema.index({ "guestInfo.phone": 1 });
-// Standalone createdAt — required for fast dashboard revenue aggregation
+// Standalone createdAt â€” required for fast dashboard revenue aggregation
 orderSchema.index({ createdAt: -1 });
 // For auto-cancel job: find unpaid pending orders older than N minutes
 orderSchema.index({ paymentMethod: 1, paymentStatus: 1, createdAt: 1 });

@@ -84,6 +84,24 @@ const ALLOWED_SORTS = [
 ];
 
 // Field whitelist for menu items — prevents mass assignment (e.g. avgRating, totalOrders)
+const validateVariantNames = (variants) => {
+  if (!Array.isArray(variants)) return;
+
+  const names = new Set();
+
+  for (const variant of variants) {
+    const name = String(variant?.name || "").trim().toLowerCase();
+
+    if (!name) continue;
+
+    if (names.has(name)) {
+      throw new AppError(`Duplicate variant name: "${variant.name}"`, 400);
+    }
+
+    names.add(name);
+  }
+};
+
 const MENU_ITEM_FIELDS = [
   "name", "nameNepali", "description", "category", "categories", "image", "basePrice",
   "variants", "addons", "isVeg", "isVegan", "isSpicy", "allergens",
@@ -242,14 +260,18 @@ exports.getCelebrationMenu = catchAsync(async (req, res) => {
 
 exports.createMenuItem = catchAsync(async (req, res) => {
   // FIX: whitelist fields — prevents faking avgRating, totalOrders, etc.
-  const item = await MenuItem.create(pickFields(req.body, MENU_ITEM_FIELDS));
+  const data = pickFields(req.body, MENU_ITEM_FIELDS);
+  validateVariantNames(data.variants);
+  const item = await MenuItem.create(data);
   await getRedis().del("menu:grouped").catch(() => {});
   sendSuccess(res, { item }, "Menu item created", 201);
 });
 
 exports.updateMenuItem = catchAsync(async (req, res) => {
   // FIX: whitelist fields on update
-  const item = await MenuItem.findByIdAndUpdate(req.params.id, pickFields(req.body, MENU_ITEM_FIELDS), { new: true, runValidators: true });
+  const data = pickFields(req.body, MENU_ITEM_FIELDS);
+  validateVariantNames(data.variants);
+  const item = await MenuItem.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
   if (!item) throw new AppError("Menu item not found", 404);
   await getRedis().del("menu:grouped").catch(() => {});
   sendSuccess(res, { item }, "Menu item updated");

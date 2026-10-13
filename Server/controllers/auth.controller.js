@@ -142,7 +142,7 @@ exports.verifyAndRegister = catchAsync(async (req, res) => {
     const suffix = Math.floor(10000 + Math.random() * 90000);
     return `${prefix}${suffix}`;
   };
-  
+
   let myReferralCode = generateCode();
   while (await User.findOne({ referralCode: myReferralCode })) {
     myReferralCode = generateCode();
@@ -424,7 +424,7 @@ exports.refreshToken = catchAsync(async (req, res) => {
         loginHistory: { $each: [loginEntry], $slice: -10 },
       },
     },
-    { new: true }
+    { new: true, select: "+refreshTokens +tokenVersion" }
   );
 
   if (!user) {

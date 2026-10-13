@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getOrder, updateOrderStatus, cancelOrder, editOrder } from '@/api/orders'
+import { getOrder, updateOrderStatus, cancelOrder, editOrder, assignRider, settleOrderRefund } from '@/api/orders'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import {
@@ -12,11 +12,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { STATUS_COLORS, NEXT_STATUS, NEXT_LABEL } from '@/lib/orderConstants'
+import { NEXT_STATUS, NEXT_LABEL } from '@/lib/orderConstants'
 import Spinner from '@/components/ui/Spinner'
 import StatusBadge from '@/components/ui/StatusBadge'
 import Modal from '@/components/ui/Modal'
 import { getAdminMenuItems } from '@/api/menu'
+import { getUsers } from '@/api/admin'
 
 const TIMELINE_STEPS = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered']
 
@@ -47,6 +48,8 @@ export default function OrderDetailPage() {
   const [pickerVariantId, setPickerVariantId] = useState(null)
   const [pickerAddonIds, setPickerAddonIds] = useState([])
   const [pickerQty, setPickerQty] = useState(1)
+  const [riders, setRiders] = useState([])
+  const [selectedRiderId, setSelectedRiderId] = useState('')
 
   const { data: order, isLoading, isError } = useQuery({
     queryKey: ['order', id],
@@ -54,6 +57,22 @@ export default function OrderDetailPage() {
     enabled: !!id,
   })
 
+  useEffect(() => {
+    const loadRiders = async () => {
+      try {
+        const { data } = await getUsers({
+          page: 1,
+          limit: 100,
+          role: 'delivery',
+        })
+        setRiders((data?.users || []).filter((rider) => rider.isActive))
+      } catch {
+        toast.error('Failed to load riders')
+      }
+    }
+
+    loadRiders()
+  }, [])
   const updateStatus = useMutation({
     mutationFn: ({ status }) => updateOrderStatus(id, status),
     onSuccess: () => {
@@ -65,6 +84,18 @@ export default function OrderDetailPage() {
     onError: (err) => toast.error(err.response?.data?.message || 'Update failed'),
   })
 
+  const assignRiderMut = useMutation({
+    mutationFn: (riderId) => assignRider(id, riderId),
+    onSuccess: () => {
+      toast.success('Rider assigned successfully')
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      setSelectedRiderId('')
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Failed to assign rider')
+    },
+  })
   const cancelMut = useMutation({
     mutationFn: (reason) => cancelOrder(id, reason),
     onSuccess: () => {
@@ -98,6 +129,18 @@ export default function OrderDetailPage() {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update items'),
   })
 
+  const settleRefundMut = useMutation({
+    mutationFn: () => settleOrderRefund(id),
+    onSuccess: () => {
+      toast.success('Cash refund marked as settled')
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Failed to settle refund')
+    },
+  })
   const openAddPicker = () => {
     setShowAddPicker(true)
     setPickerSelected(null)
@@ -127,7 +170,7 @@ export default function OrderDetailPage() {
       loadPickerItems(pickerSearch)
     }, 300)
     return () => clearTimeout(pickerSearchTimer.current)
-  }, [pickerSearch, showAddPicker])
+  }, [pickerSearch, showAddPicker, pickerSelected])
 
   const selectPickerItem = (item) => {
     setPickerSelected(item)
@@ -197,6 +240,7 @@ export default function OrderDetailPage() {
     )
   }
 
+  console.log('PAYMENT ADJUSTMENT:', order.paymentAdjustment);
   const customerName = order.customer?.name || order.guestInfo?.name || 'Guest'
   const customerPhone = order.customer?.phone || order.guestInfo?.phone
   const timelineIndex = TIMELINE_STEPS.indexOf(order.status)
@@ -275,7 +319,7 @@ export default function OrderDetailPage() {
         className="grid grid-cols-1 lg:grid-cols-3 gap-5 print:hidden"
         aria-label={`Order #${order.orderNumber} details`}
       >
-        {/* ── Main column ─────────────────────────────────────────── */}
+        {/* â”€â”€ Main column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="lg:col-span-2 space-y-5">
 
           {/* Status timeline */}
@@ -413,7 +457,7 @@ export default function OrderDetailPage() {
 
             <div className="border-t border-border mt-4 pt-3 space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
-                <span>Subtotal</span>
+                <span>Items subtotal (VAT included)</span>
                 <span>Rs. {order.subtotal?.toLocaleString()}</span>
               </div>
               {order.deliveryFee > 0 && (
@@ -428,8 +472,14 @@ export default function OrderDetailPage() {
                   <span>- Rs. {order.couponDiscount}</span>
                 </div>
               )}
+              {order.walletDiscount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Wallet/Loyalty discount</span>
+                    <span>- Rs. {Number(order.walletDiscount).toFixed(2)}</span>
+                  </div>
+                )}
               <div className="flex justify-between font-bold text-foreground pt-1.5 border-t border-border">
-                <span>Total</span>
+                <span>Total amount to pay</span>
                 <span>Rs. {order.totalAmount?.toLocaleString()}</span>
               </div>
             </div>
@@ -481,7 +531,7 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* ── Sidebar column ──────────────────────────────────────── */}
+        {/* â”€â”€ Sidebar column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className="space-y-5">
 
           {/* Customer */}
@@ -537,6 +587,67 @@ export default function OrderDetailPage() {
                 </span>
               </div>
             )}
+            {order.deliveryType !== 'pickup' && (
+              <div className="border-t border-border pt-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Rider
+                </p>
+
+                {order.deliveryPerson && (
+                  <div className="text-sm text-foreground">
+                    <div>{order.deliveryPerson.name}</div>
+                    {order.deliveryPerson.phone && (
+                      <div className="text-xs text-muted-foreground">
+                        {order.deliveryPerson.phone}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <select
+                    value={selectedRiderId}
+                    onChange={(e) => setSelectedRiderId(e.target.value)}
+                    disabled={
+                      assignRiderMut.isPending ||
+                      ['delivered', 'cancelled', 'refunded'].includes(order.status)
+                    }
+                    className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    aria-label="Select rider"
+                  >
+                    <option value="">Select rider</option>
+                    {riders.map((rider) => (
+                      <option key={rider._id} value={rider._id}>
+                        {rider.name}{rider.phone ? ` — ${rider.phone}` : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => assignRiderMut.mutate(selectedRiderId)}
+                    disabled={
+                      !selectedRiderId ||
+                      assignRiderMut.isPending ||
+                      ['delivered', 'cancelled', 'refunded'].includes(order.status)
+                    }
+                    className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  >
+                    {assignRiderMut.isPending
+                      ? 'Assigning...'
+                      : order.deliveryPerson
+                        ? 'Reassign'
+                        : 'Assign Rider'}
+                  </button>
+                </div>
+
+                {riders.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No active riders available.
+                  </p>
+                )}
+              </div>
+            )}
             {order.scheduledFor && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock size={14} className="text-muted-foreground/60 shrink-0" aria-hidden="true" />
@@ -580,6 +691,43 @@ export default function OrderDetailPage() {
                 {order.couponCode}
               </div>
             )}
+
+            {order.paymentAdjustment?.status === 'refund_due' && (
+              <div className="border border-red-200 bg-red-50 p-3 space-y-2" role="alert">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-red-700">Cash refund due</span>
+                  <span className="font-bold text-red-700">
+                    Rs. {Number(order.paymentAdjustment.refundAmount || 0).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-xs text-red-600">
+                  Original paid: Rs. {Number(order.paymentAdjustment.originalPaidAmount || 0).toLocaleString()}
+                  {' · '}
+                  New total: Rs. {Number(order.paymentAdjustment.newTotalAmount || 0).toLocaleString()}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => settleRefundMut.mutate()}
+                  disabled={settleRefundMut.isPending}
+                  className="w-full border-red-300 text-red-700 hover:bg-red-100 gs-admin-focus-ring"
+                >
+                  {settleRefundMut.isPending ? 'Confirming…' : 'Customer Received Cash Refund'}
+                </Button>
+              </div>
+            )}
+
+            {order.paymentAdjustment?.status === 'settled' &&
+              Number(order.paymentAdjustment.refundAmount || 0) > 0 && (
+                <div className="border border-green-200 bg-green-50 p-3" role="status">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-green-700">Cash refund settled</span>
+                    <span className="font-bold text-green-700">
+                      Rs. {Number(order.paymentAdjustment.refundAmount || 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
           </section>
 
           {/* Cancellation reason — semantic red preserved */}
@@ -597,7 +745,7 @@ export default function OrderDetailPage() {
         </div>
       </main>
 
-      {/* ── Printable kitchen ticket ─────────────────────────────────────── */}
+      {/* â”€â”€ Printable kitchen ticket â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* NOTE: This block is intentionally print-only and uses black/mono
           for print compatibility. Do NOT migrate to design tokens. */}
       <div className="hidden print:block font-mono text-black text-sm w-full max-w-sm">
@@ -633,15 +781,18 @@ export default function OrderDetailPage() {
           ))}
         </div>
         <div className="border-t border-dashed border-black pt-2 space-y-0.5">
-          <div className="flex justify-between"><span>Subtotal</span><span>Rs. {order.subtotal?.toLocaleString()}</span></div>
+          <div className="flex justify-between"><span>Items subtotal (VAT included)</span><span>Rs. {order.subtotal?.toLocaleString()}</span></div>
           {order.deliveryFee > 0 && (
             <div className="flex justify-between"><span>Delivery</span><span>Rs. {order.deliveryFee}</span></div>
           )}
           {order.couponDiscount > 0 && (
             <div className="flex justify-between"><span>Discount ({order.couponCode})</span><span>-Rs. {order.couponDiscount}</span></div>
           )}
+          {order.walletDiscount > 0 && (
+            <div className="flex justify-between"><span>Wallet/Loyalty discount</span><span>-Rs. {Number(order.walletDiscount).toFixed(2)}</span></div>
+          )}
           <div className="flex justify-between font-bold border-t border-dashed border-black pt-1 mt-1">
-            <span>TOTAL</span><span>Rs. {order.totalAmount?.toLocaleString()}</span>
+            <span>TOTAL TO PAY</span><span>Rs. {order.totalAmount?.toLocaleString()}</span>
           </div>
         </div>
         {order.specialInstructions && (
@@ -874,7 +1025,7 @@ export default function OrderDetailPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-foreground">Quantity</span>
                     <Button type="button" variant="outline" size="icon" className="h-7 w-7"
-                      onClick={() => setPickerQty((q) => Math.max(1, q - 1))}>−</Button>
+                      onClick={() => setPickerQty((q) => Math.max(1, q - 1))}>-</Button>
                     <span className="w-5 text-center text-sm font-semibold">{pickerQty}</span>
                     <Button type="button" variant="outline" size="icon" className="h-7 w-7"
                       onClick={() => setPickerQty((q) => Math.min(10, q + 1))}>+</Button>
@@ -952,7 +1103,7 @@ export default function OrderDetailPage() {
                         }
                         aria-label={`Decrease quantity of ${item.name}`}
                       >
-                        −
+                        -
                       </Button>
                       <span className="w-5 text-center text-sm font-semibold" aria-live="polite">
                         {item.quantity}

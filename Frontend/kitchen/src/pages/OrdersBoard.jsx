@@ -52,6 +52,7 @@ export default function OrdersBoard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [riders, setRiders] = useState([]);
 
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -71,6 +72,18 @@ export default function OrdersBoard() {
     }
   }, []);
 
+  useEffect(() => {
+    const loadRiders = async () => {
+      try {
+        const { data } = await api.get("/orders/riders");
+        setRiders(data?.users || []);
+      } catch {
+        toast.error("Failed to load riders");
+      }
+    };
+
+    loadRiders();
+  }, []);
   useEffect(() => {
     fetchOrders();
 
@@ -282,6 +295,7 @@ export default function OrdersBoard() {
                       onStatusChange={handleStatusChange}
                       onCancelOrder={handleCancelOrder}
                       onEditItems={handleEditItems}
+                     riders={riders}
                     />
                   ))
                 )}

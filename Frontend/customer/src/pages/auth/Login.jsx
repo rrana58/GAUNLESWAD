@@ -12,6 +12,7 @@ export default function Login() {
       api={api}
       currentUser={currentUser}
       expectedRole="customer"
+      authApp="customer"
       onAuthSuccess={(user, accessToken, refreshToken) => {
         setAuth(user, accessToken, refreshToken)
       }}

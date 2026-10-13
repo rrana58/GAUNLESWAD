@@ -10,6 +10,8 @@ const { jobApplyLimiter } = require("../middleware/rateLimiter");
 
 router.get("/active", ctrl.getActiveJobs);
 
+router.get("/my-applications", protect, ctrl.getMyApplications);
+
 router.post(
   "/:id/apply",
   jobApplyLimiter,

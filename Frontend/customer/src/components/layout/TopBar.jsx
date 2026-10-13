@@ -17,7 +17,7 @@ export default function TopBar() {
 
   return (
     <header
-      className="sticky top-0 z-20 flex items-center gap-2.5 px-4 py-2.5 select-none"
+      className="sticky top-0 z-50 flex items-center gap-2.5 px-4 py-2.5 select-none"
       style={{
         backgroundColor: 'var(--gs-primary, #1B3A25)',
         paddingTop: 'calc(env(safe-area-inset-top) + 0.625rem)',
