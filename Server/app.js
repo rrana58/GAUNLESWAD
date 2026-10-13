@@ -96,6 +96,7 @@ app.use(
 const allowedOrigins = [
   process.env.WEB_URL,
   process.env.ADMIN_URL,
+  process.env.KITCHEN_URL,
   process.env.MOBILE_WEB_URL,
   process.env.SERVER_URL,
   "http://localhost:5000",
