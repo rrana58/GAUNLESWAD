@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
     ],
-    base: isNative ? '/' : '/kitchen/',
+    base: '/',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
